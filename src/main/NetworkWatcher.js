@@ -201,11 +201,11 @@ class NetworkWatcher extends EventEmitter {
             if (validation.statusCode === 200) {
               fs.writeFileSync(baseName, validation.body, 'base64')
               body = validation.body
-
               info = {
                 url,
                 headers,
-                responseHeaders: validation.headers.filter(h => ['cookie', 'authorization', 'age'].indexOf(h.name) === -1)
+                responseHeaders: validation.headers.filter(h => ['cookie', 'authorization', 'age'].indexOf(h.name) === -1),
+                base64Encoded: true
               }
             }
             if (validation.statusCode === 200 || validation.statusCode === 304) {
