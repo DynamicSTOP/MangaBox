@@ -98,6 +98,11 @@ class Storage {
     }
     return row
   }
+
+  async deleteFromPathsByUrl (url = '') {
+    if (url === '') return false
+    return await this._run('DELETE FROM paths WHERE url=?', [url])
+  }
 }
 
 const storage = new Storage()

@@ -35,7 +35,7 @@ class NetworkWatcher extends EventEmitter {
     this._debugger = null
     this._cacheDirectory = path.resolve(baseDirPath, 'cache')
     this._debug = process.env.NODE_ENV === 'development'
-    this._storage = null
+    this._storage = false
     this.loadWatcherRules()
     this.loadCacheRules()
   }
@@ -183,13 +183,19 @@ class NetworkWatcher extends EventEmitter {
   }
 
   async loadFromCache (method, url, headers = {}, forceRevalidate = false) {
+    if (this._storage === false) return false
     if (this.shouldCache(method, url)) {
-      const baseName = path.resolve(this._cacheDirectory, getSHA(url))
-      if (!fs.existsSync(baseName) || !fs.existsSync(`${baseName}.info`)) {
+      const row = await this._storage.getFromPathsByUrl(url)
+      if (row === false) return false
+
+      const cachedPath = path.resolve(baseDirPath, row.path)
+      if (!fs.existsSync(cachedPath)) {
+        await this._storage.deleteFromPathsByUrl(url)
         return false
       }
       try {
-        let info = JSON.parse(fs.readFileSync(`${baseName}.info`, 'utf8'))
+        let { info } = row
+        const { stored } = row
 
         let validation = false
         let body = false
@@ -199,7 +205,7 @@ class NetworkWatcher extends EventEmitter {
             return false
           } else {
             if (validation.statusCode === 200) {
-              fs.writeFileSync(baseName, validation.body, 'base64')
+              fs.writeFileSync(cachedPath, validation.body, 'base64')
               body = validation.body
               info = {
                 url,
@@ -214,7 +220,8 @@ class NetworkWatcher extends EventEmitter {
               const cacheControlInfo = this.getCacheControlInfo(cacheControl, expireDate)
               Object.assign(info, cacheControlInfo)
               info.date = new Date().getTime()
-              fs.writeFileSync(`${baseName}.info`, JSON.stringify(info), 'utf8')
+              info.headers = validation.headers.filter(h => ['cookie', 'authorization', 'age'].indexOf(h.name) === -1)
+              await this._storage.addToPaths(url, path.relative(baseDirPath, cachedPath), info, stored)
             } else {
               return false
             }
@@ -222,7 +229,7 @@ class NetworkWatcher extends EventEmitter {
         }
 
         if (body === false) {
-          body = fs.readFileSync(baseName, info.base64Encoded ? 'base64' : 'utf8')
+          body = fs.readFileSync(cachedPath, info.base64Encoded ? 'base64' : 'utf8')
         }
         const filteredHeaders = info.responseHeaders.filter(h =>
           ['age'].indexOf(h.name.toLowerCase()) === -1
@@ -320,12 +327,22 @@ class NetworkWatcher extends EventEmitter {
     return info
   }
 
-  updateCache (method, url, headers, responseHeaders, requestId, postData) {
+  async updateCache (method, url, headers, responseHeaders, requestId, postData) {
     const cacheControl = this.getCacheControlFromHeaders(responseHeaders)
     if (cacheControl && cacheControl.match(/no-store/)) return
+    if (this._storage === false) return false
 
     if (this.shouldCache(method, url, responseHeaders)) {
-      const baseName = path.resolve(this._cacheDirectory, getSHA(url))
+      // TODO check if need to check db
+      const row = await this._storage.getFromPathsByUrl(url)
+      let cachedPath
+      let stored = false
+      if (row !== false) {
+        cachedPath = path.resolve(baseDirPath, row.path)
+        stored = row.stored
+      } else {
+        cachedPath = path.resolve(this._cacheDirectory, getSHA(url))
+      }
       const info = {
         url,
         headers,
@@ -340,13 +357,18 @@ class NetworkWatcher extends EventEmitter {
       if (method === 'POST') {
         info.post = this.getPostData(postData, headers)
       }
-      this._debugger.sendCommand('Fetch.getResponseBody', { requestId })
-        .then((result) => {
-          info.base64Encoded = result.base64Encoded
-          fs.writeFileSync(`${baseName}.info`, JSON.stringify(info), 'utf8')
-          fs.writeFileSync(`${baseName}`, result.body, result.base64Encoded ? 'base64' : 'utf8')
-        })
+      const result = await this._debugger.sendCommand('Fetch.getResponseBody', { requestId })
+      info.base64Encoded = result.base64Encoded
+      await this._storage.addToPaths(url, path.relative(baseDirPath, cachedPath), info, stored)
+      fs.writeFileSync(path.resolve(baseDirPath, cachedPath), result.body, result.base64Encoded ? 'base64' : 'utf8')
     }
+  }
+
+  shouldFailUrl (url) {
+    if (url.match(/https:\/\/(www\.)?(googletagmanager|google-analytics)\.com/)) {
+      return true
+    }
+    return false
   }
 
   async parseMessage (event, method, params) {
@@ -357,6 +379,12 @@ class NetworkWatcher extends EventEmitter {
       const { requestId, responseHeaders } = params
       try {
         if (requestType === 'Request') {
+          if (this.shouldFailUrl(url)) {
+            return this._debugger.sendCommand('Fetch.failRequest', {
+              requestId,
+              errorReason: 'Aborted'
+            })
+          }
           this.emitRequest(method, url, headers)
           const cached = await this.loadFromCache(method, url, headers, params.resourceType === 'Document')
           if (cached) {
@@ -366,15 +394,17 @@ class NetworkWatcher extends EventEmitter {
               responseHeaders: cached.headers,
               body: cached.body
             }).catch(console.error)
-            this.emitResponse(method, url, headers, responseHeaders, requestId, postData, {
+            await this.emitResponse(method, url, headers, responseHeaders, requestId, postData, {
               base64Encoded: true,
               body: cached.body
             })
             return
           }
         } else {
-          this.emitResponse(method, url, headers, responseHeaders, requestId, postData)
-          this.updateCache(method, url, headers, responseHeaders, requestId, postData)
+          await Promise.all([
+            this.emitResponse(method, url, headers, responseHeaders, requestId, postData),
+            this.updateCache(method, url, headers, responseHeaders, requestId, postData)
+          ])
         }
       } catch (e) {
         console.error(e)
@@ -413,7 +443,7 @@ class NetworkWatcher extends EventEmitter {
       }
       const ua = Object.keys(currentHeaders).filter(k => k.toLowerCase() === 'user-agent')
       if (ua.length > 0) {
-        options.headers[ua[0]] = info.headers[ua[0]]
+        options.headers[ua[0]] = currentHeaders[ua[0]]
       }
       let body = Buffer.from('')
 
