@@ -24,9 +24,9 @@ class Storage {
     }
   }
 
-  _run (data, params) {
+  _run (sql = '', params = []) {
     return new Promise((resolve, reject) => {
-      this.db.run(data, params, (err) => {
+      this.db.run(sql, params, (err) => {
         if (err !== null) {
           reject(err)
         }
@@ -35,11 +35,22 @@ class Storage {
     })
   }
 
+  _get (sql = '', params = []) {
+    return new Promise((resolve, reject) => {
+      this.db.get(sql, params, (err, row) => {
+        if (err) {
+          return reject(err)
+        }
+        return resolve(row)
+      })
+    })
+  }
+
   async _initDB () {
     try {
       // paths
-      await this._run('CREATE TABLE paths (url VARCHAR(255) PRIMARY KEY, path VARCHAR(255))')
-      await this._run('CREATE INDEX paths_path_index ON paths (path)')
+      await this._run('CREATE TABLE paths (url VARCHAR(255) PRIMARY KEY, path VARCHAR(255), info TEXT, stored BOOLEAN)')
+      await this._run('CREATE INDEX paths_path_index ON paths (stored, path)')
 
       // manga data
       await this._run(
@@ -69,6 +80,23 @@ class Storage {
     } catch (e) {
       console.error(e)
     }
+  }
+
+  async addToPaths (url = '', path = '', info = {}, stored = false) {
+    return await this._run(
+      'INSERT OR REPLACE INTO paths (url, path, info, stored) VALUES (?,?,?,?)',
+      [url, path, JSON.stringify(info), stored])
+  }
+
+  async getFromPathsByUrl (url = '') {
+    const row = await this._get('SELECT url, path, info, stored FROM paths WHERE url = ? ', url)
+    if (typeof row === 'undefined') return false
+    try {
+      row.info = JSON.parse(row.info)
+    } catch (e) {
+      return false
+    }
+    return row
   }
 }
 
