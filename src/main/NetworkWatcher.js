@@ -25,12 +25,14 @@ const checkRule = (rulesGroup, asRegexp = false, toLower) => {
   return rulesGroup
 }
 
+const basePath = process.env.NODE_ENV === 'production' ? path.resolve('./') : path.resolve(__dirname, '..', '..')
+
 class NetworkWatcher extends EventEmitter {
   constructor (props) {
     super(props)
     this._view = null
     this._debugger = null
-    this._cacheDirectory = null
+    this._cacheDirectory = path.resolve(basePath, 'cache')
     this._debug = process.env.NODE_ENV === 'development'
     this.loadWatcherRules()
     this.loadCacheRules()
@@ -60,16 +62,6 @@ class NetworkWatcher extends EventEmitter {
     }
   }
 
-  loadSettingsFromPlugin (plugin) {
-    this.loadWatcherRules(plugin.networkWatcherRules || {})
-    this.loadCacheRules(plugin.networkCacheRules || {})
-    this._cacheDirectory = path.resolve(plugin.path, 'cache')
-    if (!fs.existsSync(this._cacheDirectory)) {
-      fs.mkdirSync(this._cacheDirectory)
-      fs.writeFileSync(path.resolve(this._cacheDirectory, '.gitignore'), '*.*', 'utf8')
-    }
-  }
-
   loadWatcherRules (rules = {}) {
     this.watcherRules = {
       request: false,
@@ -88,7 +80,7 @@ class NetworkWatcher extends EventEmitter {
 
   loadCacheRules (rules = {}) {
     this.cacheRules = {
-      GET: false,
+      GET: true,
       POST: false
     }
     Object.assign(this.cacheRules, rules)
@@ -201,16 +193,15 @@ class NetworkWatcher extends EventEmitter {
         if (info.validUntil && info.validUntil < new Date().getTime()) {
           return false
         }
-        const body = fs.readFileSync(baseName, 'base64')
-
+        const body = fs.readFileSync(baseName, info.base64Encoded ? 'base64' : 'utf8')
         const headers = info.responseHeaders.filter(h =>
-          ['last-modified', 'etag', 'content-type', 'content-length'].indexOf(h.name.toLowerCase()) === -1
+          ['age'].indexOf(h.name.toLowerCase()) === -1
         )
-        headers.push({
-          name: 'date',
-          value: (new Date()).toUTCString()
-        })
 
+        headers.push({
+          name: 'age',
+          value: ((new Date().getTime()) - info.date) / 1000
+        })
         return {
           ...info,
           body,
@@ -224,34 +215,47 @@ class NetworkWatcher extends EventEmitter {
   }
 
   updateCache (method, url, headers, responseHeaders, requestId, postData) {
+    const cacheControl = responseHeaders.filter(h => h.name.toLowerCase() === 'cache-control')
+    if (cacheControl.length > 0) {
+      if (cacheControl[0].value.toLowerCase().match(/no-store/)) return
+    }
+
     if (this.shouldCache(method, url, responseHeaders)) {
       const basePath = url.replace(/\?(.*)/g, '')
       const baseName = path.resolve(this._cacheDirectory, getSHA(basePath))
       const info = {
         url,
-        responseHeaders: responseHeaders.filter(h => ['cookie', 'authorization'].indexOf(h.name) === -1)
+        responseHeaders: responseHeaders.filter(h => ['cookie', 'authorization', 'age'].indexOf(h.name) === -1)
       }
-      const cacheControl = responseHeaders.filter(h => h.name.toLowerCase() === 'cache-control')
+
+      info.date = new Date().getTime()
       if (cacheControl.length > 0) {
-        const match = cacheControl[0].value.toLowerCase().match(/(s-maxage|max-age)=(\d+)/)
+        if (cacheControl[0].value.toLowerCase().match(/no-cache/)) {
+          info.revalidate = true
+        }
+
+        const match = cacheControl[0].value.toLowerCase().match(/(s-maxage|max-age)=(-?\d+)/)
         if (match && match.length === 3) {
           const dateHeader = responseHeaders.filter(h => h.name.toLowerCase() === 'date')
+          const maxAge = parseInt(match[3])
+          if (maxAge <= 0) return
           let date
           if (dateHeader.length > 0) {
             date = new Date(dateHeader[0].value)
           } else {
             date = new Date()
           }
-          info.validUntil = date.getTime() + parseInt(match[3]) * 1000
+          info.validUntil = date.getTime() + maxAge * 1000
         }
       }
 
       if (method === 'POST') {
         info.post = this.getPostData(postData, headers)
       }
-      fs.writeFileSync(`${baseName}.info`, JSON.stringify(info), 'utf8')
       this._debugger.sendCommand('Fetch.getResponseBody', { requestId })
         .then((result) => {
+          info.base64Encoded = result.base64Encoded
+          fs.writeFileSync(`${baseName}.info`, JSON.stringify(info), 'utf8')
           fs.writeFileSync(`${baseName}`, result.body, result.base64Encoded ? 'base64' : 'utf8')
         })
     }
@@ -266,20 +270,23 @@ class NetworkWatcher extends EventEmitter {
       try {
         if (requestType === 'Request') {
           this.emitRequest(method, url, headers)
-          const cached = this.loadFromCache(method, url)
-          if (cached) {
-            console.log('served from cache', url)
-            this._debugger.sendCommand('Fetch.fulfillRequest', {
-              requestId,
-              responseCode: 200,
-              responseHeaders: cached.headers,
-              body: cached.body
-            })
-            this.emitResponse(method, url, headers, responseHeaders, requestId, postData, {
-              base64Encoded: true,
-              body: cached.body
-            })
-            return
+          if (params.resourceType !== 'Document') {
+            const cached = this.loadFromCache(method, url)
+            if (cached) {
+              this._debugger.sendCommand('Fetch.fulfillRequest', {
+                requestId,
+                responseCode: 200,
+                responseHeaders: cached.headers,
+                body: cached.body
+              })
+              this.emitResponse(method, url, headers, responseHeaders, requestId, postData, {
+                base64Encoded: true,
+                body: cached.body
+              })
+              return
+            }
+          } else {
+            console.log(url, params.requestHeaders)
           }
         } else {
           this.emitResponse(method, url, headers, responseHeaders, requestId, postData)

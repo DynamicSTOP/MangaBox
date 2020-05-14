@@ -3,15 +3,24 @@ import fs from 'fs'
 import path from 'path'
 
 const sqlite = sqlite3.verbose()
+const basePath = process.env.NODE_ENV === 'production' ? path.resolve('./') : path.resolve(__dirname, '..', '..')
 
 class Storage {
   constructor () {
-    const dbPath = process.env.NODE_ENV === 'production' ? path.resolve('./', 'storage.sqlite') : path.resolve(__dirname, '..', '..', 'storage.sqlite')
+    const dbPath = path.resolve(basePath, 'storage.sqlite')
     this.db = null
     const initDB = !fs.existsSync(dbPath)
     this.db = new sqlite.Database(dbPath)
     if (initDB) {
       this._initDB()
+    }
+    if (!fs.existsSync(path.resolve(basePath, 'cache'))) {
+      fs.mkdirSync(path.resolve(basePath, 'cache'))
+      fs.writeFileSync(path.resolve(basePath, 'cache', '.gitignore'), '*', 'utf8')
+    }
+    if (!fs.existsSync(path.resolve(basePath, 'manga'))) {
+      fs.mkdirSync(path.resolve(basePath, 'manga'))
+      fs.writeFileSync(path.resolve(basePath, 'manga', '.gitignore'), '*.*', 'utf8')
     }
   }
 
