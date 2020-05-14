@@ -25,14 +25,14 @@ const checkRule = (rulesGroup, asRegexp = false, toLower) => {
   return rulesGroup
 }
 
-const basePath = process.env.NODE_ENV === 'production' ? path.resolve('./') : path.resolve(__dirname, '..', '..')
+const baseDirPath = process.env.NODE_ENV === 'production' ? path.resolve('./') : path.resolve(__dirname, '..', '..')
 
 class NetworkWatcher extends EventEmitter {
   constructor (props) {
     super(props)
     this._view = null
     this._debugger = null
-    this._cacheDirectory = path.resolve(basePath, 'cache')
+    this._cacheDirectory = path.resolve(baseDirPath, 'cache')
     this._debug = process.env.NODE_ENV === 'development'
     this.loadWatcherRules()
     this.loadCacheRules()
@@ -178,17 +178,12 @@ class NetworkWatcher extends EventEmitter {
 
   loadFromCache (method, url) {
     if (this.shouldCache(method, url)) {
-      const basePath = url.replace(/\?(.*)/g, '')
-      const baseName = path.resolve(this._cacheDirectory, getSHA(basePath))
+      const baseName = path.resolve(this._cacheDirectory, getSHA(url))
       if (!fs.existsSync(baseName) || !fs.existsSync(`${baseName}.info`)) {
         return false
       }
       try {
         const info = JSON.parse(fs.readFileSync(`${baseName}.info`, 'utf8'))
-        // TODO drop if doesn't match? like "image.png?v=1" became "image.png?v=2"
-        if (info.url !== url) {
-          return false
-        }
         // TODO if outdated. might as well check if "update" is same
         if (info.validUntil && info.validUntil < new Date().getTime()) {
           return false
@@ -238,8 +233,7 @@ class NetworkWatcher extends EventEmitter {
     }
 
     if (this.shouldCache(method, url, responseHeaders)) {
-      const basePath = url.replace(/\?(.*)/g, '')
-      const baseName = path.resolve(this._cacheDirectory, getSHA(basePath))
+      const baseName = path.resolve(this._cacheDirectory, getSHA(url))
       const info = {
         url,
         responseHeaders: responseHeaders.filter(h => ['cookie', 'authorization', 'age'].indexOf(h.name) === -1)
