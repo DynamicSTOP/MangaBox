@@ -167,7 +167,7 @@ class NetworkWatcher extends EventEmitter {
       if (this.cacheRules[method] === true || this.cacheRules[method].some(r => r.test(url))) {
         const cacheControl = responseHeaders.filter(h => h.name.toLowerCase() === 'cache-control')
         // TODO no-cache implies that we can still store it, but must validate it
-        if (cacheControl.length > 0 && cacheControl[0].value.toLowerCase().match(/(no-cache|no-store)/)) {
+        if (cacheControl.length > 0 && cacheControl[0].value.toLowerCase().match(/no-store/)) {
           return false
         }
         return true
