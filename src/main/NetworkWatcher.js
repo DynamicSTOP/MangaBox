@@ -200,8 +200,9 @@ class NetworkWatcher extends EventEmitter {
 
         headers.push({
           name: 'age',
-          value: ((new Date().getTime()) - info.date) / 1000
+          value: Math.floor(((new Date().getTime()) - info.date) / 1000).toString()
         })
+
         return {
           ...info,
           body,
@@ -215,9 +216,25 @@ class NetworkWatcher extends EventEmitter {
   }
 
   updateCache (method, url, headers, responseHeaders, requestId, postData) {
-    const cacheControl = responseHeaders.filter(h => h.name.toLowerCase() === 'cache-control')
+    // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control
+    let cacheControl = responseHeaders.filter(h => h.name.toLowerCase() === 'cache-control')
     if (cacheControl.length > 0) {
-      if (cacheControl[0].value.toLowerCase().match(/no-store/)) return
+      cacheControl = cacheControl[0].value.toLowerCase()
+      if (cacheControl.match(/no-store/)) return
+    } else {
+      cacheControl = false
+    }
+
+    // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Expires
+    const expires = responseHeaders.filter(h => h.name.toLowerCase() === 'expires')
+    let expireDate = false
+    if (expires.length > 0) {
+      expireDate = new Date(expires[0].value)
+      if (!(expireDate instanceof Date) || isNaN(expireDate.getTime())) {
+        expireDate = false
+      }
+      if (expireDate === false || new Date().getTime() < expireDate.getTime()) return
+      expireDate = expireDate.getTime()
     }
 
     if (this.shouldCache(method, url, responseHeaders)) {
@@ -229,24 +246,41 @@ class NetworkWatcher extends EventEmitter {
       }
 
       info.date = new Date().getTime()
-      if (cacheControl.length > 0) {
-        if (cacheControl[0].value.toLowerCase().match(/no-cache/)) {
+
+      let validUntil = false
+      let sMaxAge = false
+      if (cacheControl) {
+        if (cacheControl.match(/no-cache/)) {
           info.revalidate = true
         }
 
-        const match = cacheControl[0].value.toLowerCase().match(/(s-maxage|max-age)=(-?\d+)/)
-        if (match && match.length === 3) {
-          const dateHeader = responseHeaders.filter(h => h.name.toLowerCase() === 'date')
-          const maxAge = parseInt(match[3])
+        let match = cacheControl.match(/max-age=(-?\d+)/)
+        if (match && match.length === 2) {
+          const maxAge = parseInt(match[2])
           if (maxAge <= 0) return
-          let date
-          if (dateHeader.length > 0) {
-            date = new Date(dateHeader[0].value)
-          } else {
-            date = new Date()
-          }
-          info.validUntil = date.getTime() + maxAge * 1000
+          validUntil = new Date().getTime() + maxAge * 1000
         }
+
+        match = cacheControl.match(/s-maxage=(-?\d+)/)
+        if (match && match.length === 2) {
+          const maxAge = parseInt(match[2])
+          if (maxAge <= 0) return
+          sMaxAge = true
+          validUntil = new Date().getTime() + maxAge * 1000
+        }
+
+        if (cacheControl.match(/immutable/)) {
+          info.revalidate = false
+          info.immutable = true
+        }
+      }
+
+      if (!sMaxAge && expireDate !== false && (validUntil === false || expireDate < validUntil)) {
+        validUntil = expireDate
+      }
+
+      if (validUntil !== false) {
+        info.validUntil = validUntil
       }
 
       if (method === 'POST') {
@@ -278,15 +312,13 @@ class NetworkWatcher extends EventEmitter {
                 responseCode: 200,
                 responseHeaders: cached.headers,
                 body: cached.body
-              })
+              }).catch(console.error)
               this.emitResponse(method, url, headers, responseHeaders, requestId, postData, {
                 base64Encoded: true,
                 body: cached.body
               })
               return
             }
-          } else {
-            console.log(url, params.requestHeaders)
           }
         } else {
           this.emitResponse(method, url, headers, responseHeaders, requestId, postData)
