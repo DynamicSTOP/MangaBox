@@ -149,6 +149,7 @@ class MainWindow {
 
   setStorage (storage) {
     this._storage = storage
+    networkWatcher.setStorage(storage)
   }
 
   siteNavigate (url) {

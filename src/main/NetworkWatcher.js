@@ -34,6 +34,7 @@ class NetworkWatcher extends EventEmitter {
     this._debugger = null
     this._cacheDirectory = path.resolve(baseDirPath, 'cache')
     this._debug = process.env.NODE_ENV === 'development'
+    this._storage = null
     this.loadWatcherRules()
     this.loadCacheRules()
   }
@@ -85,6 +86,10 @@ class NetworkWatcher extends EventEmitter {
     }
     Object.assign(this.cacheRules, rules)
     this.validateCacheRules()
+  }
+
+  setStorage (storage) {
+    this._storage = storage
   }
 
   validateCacheRules () {
@@ -176,7 +181,7 @@ class NetworkWatcher extends EventEmitter {
     return false
   }
 
-  loadFromCache (method, url) {
+  loadFromCache (method, url, forceRevalidate = false) {
     if (this.shouldCache(method, url)) {
       const baseName = path.resolve(this._cacheDirectory, getSHA(url))
       if (!fs.existsSync(baseName) || !fs.existsSync(`${baseName}.info`)) {
@@ -184,10 +189,15 @@ class NetworkWatcher extends EventEmitter {
       }
       try {
         const info = JSON.parse(fs.readFileSync(`${baseName}.info`, 'utf8'))
+
         // TODO if outdated. might as well check if "update" is same
-        if (info.validUntil && info.validUntil < new Date().getTime()) {
+        if (forceRevalidate || info.revalidate || (info.validUntil && info.validUntil < new Date().getTime())) {
+          // revalidate
+          console.log(url, 'revalidate')
+          console.log(info)
           return false
         }
+
         const body = fs.readFileSync(baseName, info.base64Encoded ? 'base64' : 'utf8')
         const headers = info.responseHeaders.filter(h =>
           ['age'].indexOf(h.name.toLowerCase()) === -1
@@ -196,6 +206,10 @@ class NetworkWatcher extends EventEmitter {
         headers.push({
           name: 'age',
           value: Math.floor(((new Date().getTime()) - info.date) / 1000).toString()
+        })
+        headers.push({
+          name: 'Via',
+          value: '1.0 MangaBoxCache'
         })
 
         return {
@@ -236,6 +250,7 @@ class NetworkWatcher extends EventEmitter {
       const baseName = path.resolve(this._cacheDirectory, getSHA(url))
       const info = {
         url,
+        headers,
         responseHeaders: responseHeaders.filter(h => ['cookie', 'authorization', 'age'].indexOf(h.name) === -1)
       }
 
@@ -244,7 +259,7 @@ class NetworkWatcher extends EventEmitter {
       let validUntil = false
       let sMaxAge = false
       if (cacheControl) {
-        if (cacheControl.match(/no-cache/)) {
+        if (cacheControl.match(/(no-cache|must-revalidate)/)) {
           info.revalidate = true
         }
 
@@ -298,21 +313,19 @@ class NetworkWatcher extends EventEmitter {
       try {
         if (requestType === 'Request') {
           this.emitRequest(method, url, headers)
-          if (params.resourceType !== 'Document') {
-            const cached = this.loadFromCache(method, url)
-            if (cached) {
-              this._debugger.sendCommand('Fetch.fulfillRequest', {
-                requestId,
-                responseCode: 200,
-                responseHeaders: cached.headers,
-                body: cached.body
-              }).catch(console.error)
-              this.emitResponse(method, url, headers, responseHeaders, requestId, postData, {
-                base64Encoded: true,
-                body: cached.body
-              })
-              return
-            }
+          const cached = this.loadFromCache(method, url, params.resourceType === 'Document')
+          if (cached) {
+            this._debugger.sendCommand('Fetch.fulfillRequest', {
+              requestId,
+              responseCode: 200,
+              responseHeaders: cached.headers,
+              body: cached.body
+            }).catch(console.error)
+            this.emitResponse(method, url, headers, responseHeaders, requestId, postData, {
+              base64Encoded: true,
+              body: cached.body
+            })
+            return
           }
         } else {
           this.emitResponse(method, url, headers, responseHeaders, requestId, postData)
