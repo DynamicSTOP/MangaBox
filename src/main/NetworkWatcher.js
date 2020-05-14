@@ -3,6 +3,7 @@ import EventEmitter from 'events'
 import path from 'path'
 import fs from 'fs'
 import crypto from 'crypto'
+import https from 'https'
 
 const getSHA = (data) => {
   return crypto.createHash('sha256').update(data).digest('hex')
@@ -181,33 +182,61 @@ class NetworkWatcher extends EventEmitter {
     return false
   }
 
-  loadFromCache (method, url, forceRevalidate = false) {
+  async loadFromCache (method, url, headers = {}, forceRevalidate = false) {
     if (this.shouldCache(method, url)) {
       const baseName = path.resolve(this._cacheDirectory, getSHA(url))
       if (!fs.existsSync(baseName) || !fs.existsSync(`${baseName}.info`)) {
         return false
       }
       try {
-        const info = JSON.parse(fs.readFileSync(`${baseName}.info`, 'utf8'))
+        let info = JSON.parse(fs.readFileSync(`${baseName}.info`, 'utf8'))
 
-        // TODO if outdated. might as well check if "update" is same
-        if (forceRevalidate || info.revalidate || (info.validUntil && info.validUntil < new Date().getTime())) {
-          // revalidate
-          console.log(url, 'revalidate')
-          console.log(info)
-          return false
+        let validation = false
+        let body = false
+        if (url.match(/navbar/) || forceRevalidate || info.revalidate || (info.validUntil && info.validUntil < new Date().getTime())) {
+          validation = await this.revalidate(method, info, headers)
+          if (!validation.result) {
+            return false
+          } else {
+            if (validation.statusCode === 200) {
+              fs.writeFileSync(baseName, validation.body, 'base64')
+              body = validation.body
+
+              info = {
+                url,
+                headers,
+                responseHeaders: validation.headers.filter(h => ['cookie', 'authorization', 'age'].indexOf(h.name) === -1)
+              }
+            }
+            if (validation.statusCode === 200 || validation.statusCode === 304) {
+              const expireDate = this.getExpiredFromHeaders(info.responseHeaders)
+              const cacheControl = this.getExpiredFromHeaders(info.responseHeaders)
+              const cacheControlInfo = this.getCacheControlInfo(cacheControl, expireDate)
+              Object.assign(info, cacheControlInfo)
+              info.date = new Date().getTime()
+              fs.writeFileSync(`${baseName}.info`, JSON.stringify(info), 'utf8')
+            } else {
+              return false
+            }
+          }
         }
 
-        const body = fs.readFileSync(baseName, info.base64Encoded ? 'base64' : 'utf8')
-        const headers = info.responseHeaders.filter(h =>
+        if (body === false) {
+          body = fs.readFileSync(baseName, info.base64Encoded ? 'base64' : 'utf8')
+        }
+        const filteredHeaders = info.responseHeaders.filter(h =>
           ['age'].indexOf(h.name.toLowerCase()) === -1
         )
 
-        headers.push({
+        let age = Math.floor(((new Date().getTime()) - info.date) / 1000)
+        if (age < 1) {
+          age = 1
+        }
+        filteredHeaders.push({
           name: 'age',
-          value: Math.floor(((new Date().getTime()) - info.date) / 1000).toString()
+          value: age.toString()
         })
-        headers.push({
+        filteredHeaders.push({
           name: 'Via',
           value: '1.0 MangaBoxCache'
         })
@@ -215,7 +244,7 @@ class NetworkWatcher extends EventEmitter {
         return {
           ...info,
           body,
-          headers
+          headers: filteredHeaders
         }
       } catch (e) {
         console.error(e)
@@ -224,18 +253,9 @@ class NetworkWatcher extends EventEmitter {
     return false
   }
 
-  updateCache (method, url, headers, responseHeaders, requestId, postData) {
-    // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control
-    let cacheControl = responseHeaders.filter(h => h.name.toLowerCase() === 'cache-control')
-    if (cacheControl.length > 0) {
-      cacheControl = cacheControl[0].value.toLowerCase()
-      if (cacheControl.match(/no-store/)) return
-    } else {
-      cacheControl = false
-    }
-
+  getExpiredFromHeaders (headers) {
     // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Expires
-    const expires = responseHeaders.filter(h => h.name.toLowerCase() === 'expires')
+    const expires = headers.filter(h => h.name.toLowerCase() === 'expires')
     let expireDate = false
     if (expires.length > 0) {
       expireDate = new Date(expires[0].value)
@@ -245,6 +265,64 @@ class NetworkWatcher extends EventEmitter {
       if (expireDate === false || new Date().getTime() < expireDate.getTime()) return
       expireDate = expireDate.getTime()
     }
+    return expireDate
+  }
+
+  getCacheControlFromHeaders (headers) {
+    // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control
+    let cacheControl = headers.filter(h => h.name.toLowerCase() === 'cache-control')
+    if (cacheControl.length > 0) {
+      cacheControl = cacheControl[0].value.toLowerCase()
+    } else {
+      cacheControl = false
+    }
+    return cacheControl
+  }
+
+  getCacheControlInfo (cacheControl = '', expireDate) {
+    const info = {}
+
+    let validUntil = false
+    let sMaxAge = false
+    if (cacheControl) {
+      if (cacheControl.match(/(no-cache|must-revalidate)/)) {
+        info.revalidate = true
+      }
+
+      let match = cacheControl.match(/max-age=(-?\d+)/)
+      if (match && match.length === 2) {
+        const maxAge = parseInt(match[2])
+        if (maxAge <= 0) return
+        validUntil = new Date().getTime() + maxAge * 1000
+      }
+
+      match = cacheControl.match(/s-maxage=(-?\d+)/)
+      if (match && match.length === 2) {
+        const maxAge = parseInt(match[2])
+        if (maxAge <= 0) return
+        sMaxAge = true
+        validUntil = new Date().getTime() + maxAge * 1000
+      }
+
+      if (cacheControl.match(/immutable/)) {
+        info.revalidate = false
+        info.immutable = true
+      }
+    }
+
+    if (!sMaxAge && expireDate !== false && (validUntil === false || expireDate < validUntil)) {
+      validUntil = expireDate
+    }
+
+    if (validUntil !== false) {
+      info.validUntil = validUntil
+    }
+    return info
+  }
+
+  updateCache (method, url, headers, responseHeaders, requestId, postData) {
+    const cacheControl = this.getCacheControlFromHeaders(responseHeaders)
+    if (cacheControl && cacheControl.match(/no-store/)) return
 
     if (this.shouldCache(method, url, responseHeaders)) {
       const baseName = path.resolve(this._cacheDirectory, getSHA(url))
@@ -255,42 +333,9 @@ class NetworkWatcher extends EventEmitter {
       }
 
       info.date = new Date().getTime()
-
-      let validUntil = false
-      let sMaxAge = false
-      if (cacheControl) {
-        if (cacheControl.match(/(no-cache|must-revalidate)/)) {
-          info.revalidate = true
-        }
-
-        let match = cacheControl.match(/max-age=(-?\d+)/)
-        if (match && match.length === 2) {
-          const maxAge = parseInt(match[2])
-          if (maxAge <= 0) return
-          validUntil = new Date().getTime() + maxAge * 1000
-        }
-
-        match = cacheControl.match(/s-maxage=(-?\d+)/)
-        if (match && match.length === 2) {
-          const maxAge = parseInt(match[2])
-          if (maxAge <= 0) return
-          sMaxAge = true
-          validUntil = new Date().getTime() + maxAge * 1000
-        }
-
-        if (cacheControl.match(/immutable/)) {
-          info.revalidate = false
-          info.immutable = true
-        }
-      }
-
-      if (!sMaxAge && expireDate !== false && (validUntil === false || expireDate < validUntil)) {
-        validUntil = expireDate
-      }
-
-      if (validUntil !== false) {
-        info.validUntil = validUntil
-      }
+      const expireDate = this.getExpiredFromHeaders(responseHeaders)
+      const cacheControlInfo = this.getCacheControlInfo(cacheControl, expireDate)
+      Object.assign(info, cacheControlInfo)
 
       if (method === 'POST') {
         info.post = this.getPostData(postData, headers)
@@ -304,7 +349,7 @@ class NetworkWatcher extends EventEmitter {
     }
   }
 
-  parseMessage (event, method, params) {
+  async parseMessage (event, method, params) {
     // check this page https://chromedevtools.github.io/devtools-protocol/tot/Network
     if (method === 'Fetch.requestPaused') {
       const requestType = params.responseHeaders ? 'Response' : 'Request'
@@ -313,7 +358,7 @@ class NetworkWatcher extends EventEmitter {
       try {
         if (requestType === 'Request') {
           this.emitRequest(method, url, headers)
-          const cached = this.loadFromCache(method, url, params.resourceType === 'Document')
+          const cached = await this.loadFromCache(method, url, headers, params.resourceType === 'Document')
           if (cached) {
             this._debugger.sendCommand('Fetch.fulfillRequest', {
               requestId,
@@ -343,6 +388,60 @@ class NetworkWatcher extends EventEmitter {
       this._debugger.detach()
     }
     this._view = null
+  }
+
+  revalidate (method, info, currentHeaders = {}) {
+    if (method.toLowerCase() !== 'get') return Promise.resolve({ result: false })
+    return new Promise((resolve, reject) => {
+      const options = {
+        method: method.toUpperCase(),
+        headers: {
+          ...currentHeaders
+        }
+      }
+
+      const modifiedHeader = Object.keys(options.headers).filter(k => k.toLowerCase() === 'if-modified-since')
+      if (modifiedHeader.length > 0) {
+        options.headers[modifiedHeader[0]] = new Date(info.date).toUTCString()
+      } else {
+        options.headers['If-Modified-Since'] = new Date(info.date).toUTCString()
+      }
+
+      const etag = Object.keys(info.headers).filter(k => k.toLowerCase() === 'etag')
+      if (etag.length > 0) {
+        options.headers[etag[0]] = info.headers[etag[0]]
+      }
+      const ua = Object.keys(currentHeaders).filter(k => k.toLowerCase() === 'user-agent')
+      if (ua.length > 0) {
+        options.headers[ua[0]] = info.headers[ua[0]]
+      }
+      let body = Buffer.from('')
+
+      const req = https.request(info.url, options, (result) => {
+        result.on('data', (chunk) => {
+          body = Buffer.concat([body, chunk])
+        })
+        result.on('end', () => {
+          resolve({
+            result: true,
+            statusCode: result.statusCode,
+            headers: Object.keys(result.headers).map(k => {
+              return {
+                name: k.toLowerCase(),
+                value: result.headers[k]
+              }
+            }),
+            body: body.toString('base64')
+          })
+        })
+      })
+
+      req.on('error', (err) => {
+        console.error('error while revalidating', err)
+        resolve({ result: false })
+      })
+      req.end()
+    })
   }
 }
 
