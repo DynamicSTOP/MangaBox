@@ -1,5 +1,5 @@
 <script>
-import { mapGetters } from 'vuex'
+import { mapState } from 'vuex'
 export default {
   name: 'OpenSite',
   props: {
@@ -13,7 +13,10 @@ export default {
     }
   },
   computed: {
-    ...mapGetters(['isNavigating', 'currentUrl'])
+    ...mapState(['isNavigating', 'currentURL']),
+    isActive () {
+      return this.currentURL && this.currentURL.indexOf(this.url) === 0
+    }
   },
   methods: {
     openSite () {
@@ -26,7 +29,7 @@ export default {
 <template>
   <div
     class="openSite"
-    :class="{disabled: isNavigating, active: currentUrl && currentUrl.indexOf(url)===0}"
+    :class="{disabled: isNavigating, active: isActive}"
     @click="openSite"
   >
     {{ text }}

@@ -1,13 +1,26 @@
 <script>
-import { mapGetters } from 'vuex'
+import { mapState } from 'vuex'
 import OpenSite from './TopBar/OpenSite'
 export default {
   name: 'TopBar',
   components: { OpenSite },
   computed: {
-    ...mapGetters(['sites', 'savedTraffic', 'savedTrafficMB', 'isManga']),
+    ...mapState(['savedTraffic', 'sites', 'isManga', 'isAddingManga']),
     infoTitle () {
       return `loaded ${this.savedTraffic} bytes from cache`
+    },
+    savedTrafficMB () {
+      return Math.floor(this.savedTraffic / 1024 / 1024)
+    },
+    isDisabled () {
+      return !this.isManga || this.isAddingManga
+    }
+  },
+  methods: {
+    add () {
+      if (this.isManga) {
+        this.$store.dispatch('MANGA_ADD')
+      }
     }
   }
 }
@@ -34,7 +47,10 @@ export default {
         {{ savedTrafficMB }} Mb
       </div>
       <div class="controls">
-        <div :class="{active:isManga}">
+        <div
+          :class="{active:isManga, disabled: isDisabled}"
+          @click="add"
+        >
           Add
         </div>
       </div>

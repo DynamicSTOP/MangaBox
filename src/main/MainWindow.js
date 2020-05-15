@@ -98,7 +98,7 @@ class MainWindow {
         this._window.removeBrowserView(this._siteView)
         this._siteView.destroy()
         this._siteView = null
-        this.updateTopBar(null)
+        this.sendToRenderer('SITE_NAVIGATED', null)
       }
     })
   }
@@ -124,6 +124,9 @@ class MainWindow {
         break
       case 'SITE_NAVIGATE':
         this.siteNavigate(data)
+        break
+      case 'MANGA_ADD':
+        this.addManga()
         break
       default:
         if (this._debug) {
@@ -212,6 +215,15 @@ class MainWindow {
         })
       }
     })
+  }
+
+  addManga () {
+    if (this._siteView) {
+      const url = this._siteView.webContents.getURL()
+      if (this.isMangaUrl(url)) {
+        console.log('adding', url)
+      }
+    }
   }
 
   isMangaUrl (url) {

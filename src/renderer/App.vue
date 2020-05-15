@@ -1,11 +1,11 @@
 <script>
 import '@/scss/main.scss'
-import { mapGetters } from 'vuex'
+import { mapState } from 'vuex'
 
 export default {
   name: 'App',
   computed: {
-    ...mapGetters(['isLoading'])
+    ...mapState(['isLoading'])
   },
   created () {
     this.$store.dispatch('APP_LOADED')

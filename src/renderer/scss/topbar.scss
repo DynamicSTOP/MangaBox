@@ -33,12 +33,18 @@
     }
   }
   .controls {
+    font-weight: 800;
     > div:not(.active) {
       cursor: not-allowed;
     }
     .active {
       cursor: pointer;
       text-shadow: 2px 2px 4px #035700;
+    }
+    .disabled {
+      cursor: not-allowed;
+      text-shadow: none;
+      color: #636363;
     }
   }
 }

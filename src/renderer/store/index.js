@@ -11,34 +11,17 @@ const store = new Vuex.Store({
     isNavigating: false,
     sites: [],
     savedTraffic: 0,
-    currentUrl: null,
+    currentURL: null,
     isManga: false,
-    isChapter: false
+    isChapter: false,
+    isAddingManga: false
   },
   getters: {
-    isLoading (state) {
-      return state.isLoading
-    },
-    isNavigating (state) {
-      return state.isNavigating
-    },
-    sites (state) {
-      return state.sites
-    },
-    savedTraffic (state) {
-      return state.savedTraffic
-    },
-    savedTrafficMB (state) {
-      return Math.floor(state.savedTraffic / 1024 / 1024)
-    },
-    currentUrl (state) {
-      return state.currentUrl
-    },
     isManga (state) {
-      return state.currentUrl !== null && state.isManga
+      return state.currentURL !== null && state.isManga
     },
     isChapter (state) {
-      return state.currentUrl !== null && state.isChapter
+      return state.currentURL !== null && state.isChapter
     }
   },
   mutations: {
@@ -61,11 +44,16 @@ const store = new Vuex.Store({
       }
     },
     URL_CURRENT (store, url) {
-      store.currentUrl = url
+      store.currentURL = url
     },
     CONTROLS_UPDATE (store, data) {
       store.isManga = data.isManga
       store.isChapter = data.isChapter
+    },
+    MANGA_ADD (store) {
+      if (store.isAddingManga) return
+      store.isAddingManga = true
+      sendMessageToMain('MANGA_ADD')
     }
   },
   actions: {
@@ -83,6 +71,9 @@ const store = new Vuex.Store({
     },
     CONTROLS_UPDATE (context, data) {
       context.commit('CONTROLS_UPDATE', data)
+    },
+    MANGA_ADD (context) {
+      context.commit('MANGA_ADD')
     }
   }
 })
