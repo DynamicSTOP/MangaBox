@@ -19,6 +19,9 @@
       &.disabled:hover {
         cursor: not-allowed;
       }
+      &.active {
+        text-shadow: 2px 2px 4px #035700;
+      }
     }
 
     :first-child {

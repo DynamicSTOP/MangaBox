@@ -10,7 +10,8 @@ const store = new Vuex.Store({
     isLoading: true,
     isNavigating: false,
     sites: [],
-    savedTraffic: 0
+    savedTraffic: 0,
+    currentUrl: null
   },
   getters: {
     isLoading (state) {
@@ -27,6 +28,9 @@ const store = new Vuex.Store({
     },
     savedTrafficMB (state) {
       return Math.floor(state.savedTraffic / 1024 / 1024)
+    },
+    currentUrl (state) {
+      return state.currentUrl
     }
   },
   mutations: {
@@ -47,6 +51,9 @@ const store = new Vuex.Store({
       if (savedTraffic) {
         store.savedTraffic = savedTraffic
       }
+    },
+    URL_CURRENT (store, url) {
+      store.currentUrl = url
     }
   },
   actions: {
@@ -58,6 +65,9 @@ const store = new Vuex.Store({
     },
     INFO_UPDATE (context, info) {
       context.commit('INFO_UPDATE', info)
+    },
+    URL_CURRENT (context, url) {
+      context.commit('URL_CURRENT', url)
     }
   }
 })

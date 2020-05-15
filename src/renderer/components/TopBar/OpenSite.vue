@@ -13,7 +13,7 @@ export default {
     }
   },
   computed: {
-    ...mapGetters(['isNavigating'])
+    ...mapGetters(['isNavigating', 'currentUrl'])
   },
   methods: {
     openSite () {
@@ -26,7 +26,7 @@ export default {
 <template>
   <div
     class="openSite"
-    :class="{disabled: isNavigating}"
+    :class="{disabled: isNavigating, active: currentUrl && currentUrl.indexOf(url)===0}"
     @click="openSite"
   >
     {{ text }}

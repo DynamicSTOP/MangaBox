@@ -95,6 +95,7 @@ class MainWindow {
         this._window.removeBrowserView(this._siteView)
         this._siteView.destroy()
         this._siteView = null
+        this.updateTopBar(null)
       }
     })
   }
@@ -196,6 +197,11 @@ class MainWindow {
     this._siteView.setAutoResize({
       width: true,
       height: true
+    })
+
+    this._siteView.webContents.on('dom-ready', () => {
+      console.log(this._siteView.webContents.getURL())
+      this.sendToRenderer('URL_CURRENT', this._siteView.webContents.getURL())
     })
   }
 
