@@ -4,8 +4,9 @@ const { VueLoaderPlugin } = require('vue-loader')
 const MiniCssExtractPlugin = require('mini-css-extract-plugin')
 const BabiliWebpackPlugin = require('babili-webpack-plugin')
 const HtmlWebpackPlugin = require('html-webpack-plugin')
+const CopyPlugin = require('copy-webpack-plugin')
 
-module.exports = {
+const config = {
   entry: './src/renderer/index.js',
   mode: 'development',
   //target: 'electron-renderer',
@@ -133,3 +134,13 @@ module.exports = {
     })
   ]
 }
+
+if (process.env.NODE_ENV === 'production') {
+  config.plugins.push(new CopyPlugin([
+    {
+      from: path.resolve(__dirname, '..', 'src', 'scripts'),
+      to: 'scripts'
+    }]
+  ))
+}
+module.exports = config

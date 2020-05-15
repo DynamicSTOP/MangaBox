@@ -1,5 +1,6 @@
 import { ipcMain, globalShortcut, BrowserWindow, BrowserView, screen, session } from 'electron'
 import path from 'path'
+import fs from 'fs'
 import networkWatcher from './NetworkWatcher'
 
 const basePath = process.env.NODE_ENV === 'production' ? path.resolve(__dirname) : path.resolve(__dirname, '..')
@@ -11,12 +12,7 @@ class MainWindow {
     this._siteView = null
     this._storage = null
     this._savedTraffic = 0
-
-    networkWatcher.on('Request', (data) => this.sendToMainView('Request', data))
-    networkWatcher.on('Response', (data) => this.sendToMainView('Response', data))
-
-    networkWatcher.on('Request', (data) => console.log('Request', data.url))
-    networkWatcher.on('Response', (data) => console.log('Response', data.url))
+    this._currentSite = null
 
     networkWatcher.on('loadedFromCache', this.updateSavedSize.bind(this))
 
@@ -25,11 +21,13 @@ class MainWindow {
         text: 'Google',
         url: 'https://www.google.com'
       }, {
+        siteId: 0,
         text: 'MangaDex',
         url: 'https://mangadex.org',
         type: 'manga',
         mangaRegexp: /https:\/\/mangadex\.org\/title\/(\d+)/,
-        chapterRegexp: /https:\/\/mangadex\.org\/chapter\/(\d+)/
+        chapterRegexp: /https:\/\/mangadex\.org\/chapter\/(\d+)/,
+        mangaInfoJs: fs.readFileSync(path.resolve(basePath, 'scripts', 'md_mangaInfo.js'), 'utf8')
       }]
     }
   }
@@ -80,6 +78,7 @@ class MainWindow {
     this._window.on('closed', () => {
       this._window = null
       this._siteView = null
+      this._currentSite = null
     })
   }
 
@@ -208,13 +207,26 @@ class MainWindow {
     this._siteView.webContents.on('dom-ready', () => {
       if (this._siteView) {
         const url = this._siteView.webContents.getURL()
+        this._currentSite = this.config.sites.find((site) => url.indexOf(site.url) !== -1)
+        const isManga = this.isMangaUrl(url)
         this.sendToRenderer('URL_CURRENT', url)
         this.sendToRenderer('CONTROLS_UPDATE', {
-          isManga: this.isMangaUrl(url),
+          isManga,
           isChapter: this.isChapterUrl(url)
         })
+        if (isManga) {
+          this.setLastManga()
+        }
       }
     })
+  }
+
+  setLastManga () {
+    if (this._siteView && this._currentSite) {
+      this._siteView.webContents.executeJavaScriptInIsolatedWorld(1, [{ code: this._currentSite.mangaInfoJs }])
+        .then(console.log)
+        .catch(console.error)
+    }
   }
 
   addManga () {
@@ -227,7 +239,7 @@ class MainWindow {
   }
 
   isMangaUrl (url) {
-    return this.config.sites.some((site) => site.type === 'manga' && site.mangaRegexp.test(url))
+    return !!this._currentSite && this._currentSite.type === 'manga' && this._currentSite.mangaRegexp.test(url)
   }
 
   isChapterUrl (url) {

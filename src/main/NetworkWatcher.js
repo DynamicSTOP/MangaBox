@@ -129,9 +129,9 @@ class NetworkWatcher extends EventEmitter {
       data: postData,
       type: null
     }
-    const keys = Object.keys(headers).filter((k) => k.toLowerCase() === 'content-type')
-    if (keys.length) {
-      post.type = headers[keys[0]]
+    const key = Object.keys(headers).find((k) => k.toLowerCase() === 'content-type')
+    if (key) {
+      post.type = headers[key]
     }
     return post
   }
@@ -173,9 +173,9 @@ class NetworkWatcher extends EventEmitter {
   shouldCache (method = '', url = '', responseHeaders = []) {
     if (this.cacheRules[method]) {
       if (this.cacheRules[method] === true || this.cacheRules[method].some(r => r.test(url))) {
-        const cacheControl = responseHeaders.filter(h => h.name.toLowerCase() === 'cache-control')
+        const cacheControl = responseHeaders.find(h => h.name.toLowerCase() === 'cache-control')
         // TODO no-cache implies that we can still store it, but must validate it
-        if (cacheControl.length > 0 && cacheControl[0].value.toLowerCase().match(/no-store/)) {
+        if (cacheControl && cacheControl.value.toLowerCase().match(/no-store/)) {
           return false
         }
         return true
@@ -201,7 +201,7 @@ class NetworkWatcher extends EventEmitter {
         const { stored } = row
 
         let body = false
-        if (url.match(/navbar/) || forceRevalidate || info.revalidate || (info.validUntil && info.validUntil < new Date().getTime())) {
+        if (forceRevalidate || info.revalidate || (info.validUntil && info.validUntil < new Date().getTime())) {
           validation = await this.revalidate(method, info, headers)
           if (!validation.result) {
             return false
@@ -265,28 +265,24 @@ class NetworkWatcher extends EventEmitter {
 
   getExpiredFromHeaders (headers) {
     // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Expires
-    const expires = headers.filter(h => h.name.toLowerCase() === 'expires')
-    let expireDate = false
-    if (expires.length > 0) {
-      expireDate = new Date(expires[0].value)
-      if (!(expireDate instanceof Date) || isNaN(expireDate.getTime())) {
-        expireDate = false
+    const expires = headers.find(h => h.name.toLowerCase() === 'expires')
+    if (expires) {
+      const expireDate = new Date(expires.value)
+      if (!(expireDate instanceof Date) || isNaN(expireDate.getTime()) || new Date().getTime() < expireDate.getTime()) {
+        return false
       }
-      if (expireDate === false || new Date().getTime() < expireDate.getTime()) return
-      expireDate = expireDate.getTime()
+      return expireDate.getTime()
     }
-    return expireDate
+    return false
   }
 
   getCacheControlFromHeaders (headers) {
     // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control
-    let cacheControl = headers.filter(h => h.name.toLowerCase() === 'cache-control')
-    if (cacheControl.length > 0) {
-      cacheControl = cacheControl[0].value.toLowerCase()
-    } else {
-      cacheControl = false
+    const cacheControl = headers.find(h => h.name.toLowerCase() === 'cache-control')
+    if (cacheControl) {
+      return cacheControl.value.toLowerCase()
     }
-    return cacheControl
+    return false
   }
 
   getCacheControlInfo (cacheControl = '', expireDate) {
@@ -332,7 +328,7 @@ class NetworkWatcher extends EventEmitter {
 
   async updateCache (method, url, headers, responseHeaders, requestId, postData) {
     const cacheControl = this.getCacheControlFromHeaders(responseHeaders)
-    if (cacheControl && cacheControl.match(/no-store/)) return
+    if (cacheControl && cacheControl.match(/no-store/)) return false
     if (this._storage === false) return false
 
     if (this.shouldCache(method, url, responseHeaders)) {
@@ -368,10 +364,7 @@ class NetworkWatcher extends EventEmitter {
   }
 
   shouldFailUrl (url) {
-    if (url.match(/https:\/\/(www\.)?(googletagmanager|google-analytics)\.com/)) {
-      return true
-    }
-    return false
+    return !!url.match(/https:\/\/(www\.)?(googletagmanager|google-analytics)\.com/);
   }
 
   async parseMessage (event, method, params) {
@@ -443,20 +436,20 @@ class NetworkWatcher extends EventEmitter {
         }
       }
 
-      const modifiedHeader = Object.keys(options.headers).filter(k => k.toLowerCase() === 'if-modified-since')
-      if (modifiedHeader.length > 0) {
-        options.headers[modifiedHeader[0]] = new Date(info.date).toUTCString()
+      const modifiedHeader = Object.keys(options.headers).find(k => k.toLowerCase() === 'if-modified-since')
+      if (modifiedHeader) {
+        options.headers[modifiedHeader] = new Date(info.date).toUTCString()
       } else {
         options.headers['If-Modified-Since'] = new Date(info.date).toUTCString()
       }
 
-      const etag = Object.keys(info.headers).filter(k => k.toLowerCase() === 'etag')
-      if (etag.length > 0) {
-        options.headers[etag[0]] = info.headers[etag[0]]
+      const etag = Object.keys(info.headers).find(k => k.toLowerCase() === 'etag')
+      if (etag) {
+        options.headers[etag] = info.headers[etag]
       }
-      const ua = Object.keys(currentHeaders).filter(k => k.toLowerCase() === 'user-agent')
-      if (ua.length > 0) {
-        options.headers[ua[0]] = currentHeaders[ua[0]]
+      const ua = Object.keys(currentHeaders).find(k => k.toLowerCase() === 'user-agent')
+      if (ua) {
+        options.headers[ua] = currentHeaders[ua]
       }
       let body = Buffer.from('')
 
