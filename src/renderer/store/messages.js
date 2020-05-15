@@ -36,6 +36,9 @@ export class MessageParser {
       case 'SITE_NAVIGATED':
         this.store.commit('SITE_NAVIGATED', message.data)
         break
+      case 'INFO_UPDATE':
+        this.store.commit('INFO_UPDATE', message.data)
+        break
       default:
         console.error('unknown message type', message)
         break

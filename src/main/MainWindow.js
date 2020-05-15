@@ -1,4 +1,4 @@
-import { ipcMain, globalShortcut, BrowserWindow, BrowserView, screen, session } from 'electron'
+import { ipcMain, globalShortcut, BrowserWindow, BrowserView, Menu, screen, session } from 'electron'
 import path from 'path'
 import networkWatcher from './NetworkWatcher'
 
@@ -10,12 +10,15 @@ class MainWindow {
     this._debug = process.env.NODE_ENV === 'development'
     this._siteView = null
     this._storage = null
+    this._savedTraffic = 0
 
     networkWatcher.on('Request', (data) => this.sendToMainView('Request', data))
     networkWatcher.on('Response', (data) => this.sendToMainView('Response', data))
 
     networkWatcher.on('Request', (data) => console.log('Request', data.url))
     networkWatcher.on('Response', (data) => console.log('Response', data.url))
+
+    networkWatcher.on('loadedFromCache', this.updateSavedSize.bind(this))
 
     this.config = {
       sites: [{
@@ -194,6 +197,11 @@ class MainWindow {
       width: true,
       height: true
     })
+  }
+
+  updateSavedSize (size) {
+    this._savedTraffic += size
+    this.sendToRenderer('INFO_UPDATE', { savedTraffic: this._savedTraffic })
   }
 }
 

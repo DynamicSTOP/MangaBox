@@ -5,7 +5,10 @@ export default {
   name: 'TopBar',
   components: { OpenSite },
   computed: {
-    ...mapGetters(['sites'])
+    ...mapGetters(['sites', 'savedTraffic', 'savedTrafficMB']),
+    infoTitle () {
+      return `loaded ${this.savedTraffic} bytes from cache`
+    }
   }
 }
 </script>
@@ -15,11 +18,24 @@ export default {
     id="topbar"
     class="flex-row"
   >
-    <open-site
-      v-for="site in sites"
-      :key="'os_'+site.text"
-      :text="site.text"
-      :url="site.url"
-    />
+    <div class="openSites flex-row">
+      <open-site
+        v-for="site in sites"
+        :key="'os_'+site.text"
+        :text="site.text"
+        :url="site.url"
+      />
+    </div>
+    <div class="topbar-right flex-row">
+      <div
+        id="topbar-info"
+        :title="infoTitle"
+      >
+        {{ savedTrafficMB }} Mb
+      </div>
+      <div class="controls">
+        <div>Add</div>
+      </div>
+    </div>
   </div>
 </template>

@@ -9,7 +9,8 @@ const store = new Vuex.Store({
   state: {
     isLoading: true,
     isNavigating: false,
-    sites: []
+    sites: [],
+    savedTraffic: 0
   },
   getters: {
     isLoading (state) {
@@ -20,6 +21,12 @@ const store = new Vuex.Store({
     },
     sites (state) {
       return state.sites
+    },
+    savedTraffic (state) {
+      return state.savedTraffic
+    },
+    savedTrafficMB (state) {
+      return Math.floor(state.savedTraffic / 1024 / 1024)
     }
   },
   mutations: {
@@ -34,6 +41,12 @@ const store = new Vuex.Store({
     },
     SITE_NAVIGATED (store) {
       store.isNavigating = false
+    },
+    INFO_UPDATE (store, newInfo) {
+      const { savedTraffic } = newInfo
+      if (savedTraffic) {
+        store.savedTraffic = savedTraffic
+      }
     }
   },
   actions: {
@@ -42,6 +55,9 @@ const store = new Vuex.Store({
     },
     APP_LOADED () {
       sendMessageToMain('APP_LOADED')
+    },
+    INFO_UPDATE (context, info) {
+      context.commit('INFO_UPDATE', info)
     }
   }
 })

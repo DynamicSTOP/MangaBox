@@ -193,11 +193,11 @@ class NetworkWatcher extends EventEmitter {
         await this._storage.deleteFromPathsByUrl(url)
         return false
       }
+      let validation = false
       try {
         let { info } = row
         const { stored } = row
 
-        let validation = false
         let body = false
         if (url.match(/navbar/) || forceRevalidate || info.revalidate || (info.validUntil && info.validUntil < new Date().getTime())) {
           validation = await this.revalidate(method, info, headers)
@@ -251,7 +251,8 @@ class NetworkWatcher extends EventEmitter {
         return {
           ...info,
           body,
-          headers: filteredHeaders
+          headers: filteredHeaders,
+          redownloaded: validation && validation.statusCode === 200
         }
       } catch (e) {
         console.error(e)
@@ -398,6 +399,16 @@ class NetworkWatcher extends EventEmitter {
               base64Encoded: true,
               body: cached.body
             })
+            if (!cached.redownloaded) {
+              if (cached.body.length > 0) {
+                let size = (cached.body.length / 4) * 3
+                const match = cached.body.match(/(=+)$/)
+                if (match) {
+                  size -= match[1].length
+                }
+                this.emit('loadedFromCache', size)
+              }
+            }
             return
           }
         } else {
