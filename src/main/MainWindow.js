@@ -1,4 +1,4 @@
-import { ipcMain, globalShortcut, BrowserWindow, BrowserView, Menu, screen, session } from 'electron'
+import { ipcMain, globalShortcut, BrowserWindow, BrowserView, screen, session } from 'electron'
 import path from 'path'
 import networkWatcher from './NetworkWatcher'
 
