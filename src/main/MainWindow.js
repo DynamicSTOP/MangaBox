@@ -34,7 +34,10 @@ class MainWindow {
   }
 
   create () {
-    if (this._window !== null) return
+    if (this._window !== null) {
+      this._window.focus()
+      return
+    }
     this.openMainWindow()
   }
 

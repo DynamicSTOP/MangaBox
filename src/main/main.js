@@ -15,10 +15,6 @@ app.on('ready', () => {
   tray = new Tray(path.resolve(basePath, 'images', 'ext_icon_inactive.png'))
   const contextMenu = Menu.buildFromTemplate([
     {
-      id: 1,
-      label: 'Status checking in ...'
-    },
-    {
       id: 2,
       label: 'Force check'
     },
