@@ -5,7 +5,7 @@ export default {
   name: 'TopBar',
   components: { OpenSite },
   computed: {
-    ...mapGetters(['sites', 'savedTraffic', 'savedTrafficMB']),
+    ...mapGetters(['sites', 'savedTraffic', 'savedTrafficMB', 'isManga']),
     infoTitle () {
       return `loaded ${this.savedTraffic} bytes from cache`
     }
@@ -34,7 +34,9 @@ export default {
         {{ savedTrafficMB }} Mb
       </div>
       <div class="controls">
-        <div>Add</div>
+        <div :class="{active:isManga}">
+          Add
+        </div>
       </div>
     </div>
   </div>

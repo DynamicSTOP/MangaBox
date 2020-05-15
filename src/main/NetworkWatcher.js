@@ -28,6 +28,8 @@ const checkRule = (rulesGroup, asRegexp = false, toLower) => {
 
 const baseDirPath = process.env.NODE_ENV === 'production' ? path.resolve('./') : path.resolve(__dirname, '..', '..')
 
+// TODO put more try catch into async funcs. it spits warnings on app close while loading stuff
+
 class NetworkWatcher extends EventEmitter {
   constructor (props) {
     super(props)
@@ -216,7 +218,7 @@ class NetworkWatcher extends EventEmitter {
             }
             if (validation.statusCode === 200 || validation.statusCode === 304) {
               const expireDate = this.getExpiredFromHeaders(info.responseHeaders)
-              const cacheControl = this.getExpiredFromHeaders(info.responseHeaders)
+              const cacheControl = this.getCacheControlFromHeaders(info.responseHeaders)
               const cacheControlInfo = this.getCacheControlInfo(cacheControl, expireDate)
               Object.assign(info, cacheControlInfo)
               info.date = new Date().getTime()
@@ -420,7 +422,7 @@ class NetworkWatcher extends EventEmitter {
       } catch (e) {
         console.error(e)
       }
-      this._debugger.sendCommand('Fetch.continueRequest', { requestId })
+      this._debugger.sendCommand('Fetch.continueRequest', { requestId }).catch(console.error)
     }
   }
 
@@ -433,7 +435,7 @@ class NetworkWatcher extends EventEmitter {
 
   revalidate (method, info, currentHeaders = {}) {
     if (method.toLowerCase() !== 'get') return Promise.resolve({ result: false })
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const options = {
         method: method.toUpperCase(),
         headers: {

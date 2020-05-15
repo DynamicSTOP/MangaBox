@@ -42,6 +42,9 @@ export class MessageParser {
       case 'URL_CURRENT':
         this.store.commit('URL_CURRENT', message.data)
         break
+      case 'CONTROLS_UPDATE':
+        this.store.commit('CONTROLS_UPDATE', message.data)
+        break
       default:
         console.error('unknown message type', message)
         break

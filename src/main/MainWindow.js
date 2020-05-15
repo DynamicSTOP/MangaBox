@@ -23,10 +23,13 @@ class MainWindow {
     this.config = {
       sites: [{
         text: 'Google',
-        url: 'https://google.com'
+        url: 'https://www.google.com'
       }, {
         text: 'MangaDex',
-        url: 'https://mangadex.org'
+        url: 'https://mangadex.org',
+        type: 'manga',
+        mangaRegexp: /https:\/\/mangadex\.org\/title\/(\d+)/,
+        chapterRegexp: /https:\/\/mangadex\.org\/chapter\/(\d+)/
       }]
     }
   }
@@ -200,9 +203,23 @@ class MainWindow {
     })
 
     this._siteView.webContents.on('dom-ready', () => {
-      console.log(this._siteView.webContents.getURL())
-      this.sendToRenderer('URL_CURRENT', this._siteView.webContents.getURL())
+      if (this._siteView) {
+        const url = this._siteView.webContents.getURL()
+        this.sendToRenderer('URL_CURRENT', url)
+        this.sendToRenderer('CONTROLS_UPDATE', {
+          isManga: this.isMangaUrl(url),
+          isChapter: this.isChapterUrl(url)
+        })
+      }
     })
+  }
+
+  isMangaUrl (url) {
+    return this.config.sites.some((site) => site.type === 'manga' && site.mangaRegexp.test(url))
+  }
+
+  isChapterUrl (url) {
+    return this.config.sites.some((site) => site.type === 'manga' && site.mangaRegexp.test(url))
   }
 
   updateSavedSize (size) {

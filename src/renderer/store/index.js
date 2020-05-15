@@ -11,7 +11,9 @@ const store = new Vuex.Store({
     isNavigating: false,
     sites: [],
     savedTraffic: 0,
-    currentUrl: null
+    currentUrl: null,
+    isManga: false,
+    isChapter: false
   },
   getters: {
     isLoading (state) {
@@ -31,6 +33,12 @@ const store = new Vuex.Store({
     },
     currentUrl (state) {
       return state.currentUrl
+    },
+    isManga (state) {
+      return state.currentUrl !== null && state.isManga
+    },
+    isChapter (state) {
+      return state.currentUrl !== null && state.isChapter
     }
   },
   mutations: {
@@ -54,6 +62,10 @@ const store = new Vuex.Store({
     },
     URL_CURRENT (store, url) {
       store.currentUrl = url
+    },
+    CONTROLS_UPDATE (store, data) {
+      store.isManga = data.isManga
+      store.isChapter = data.isChapter
     }
   },
   actions: {
@@ -68,6 +80,9 @@ const store = new Vuex.Store({
     },
     URL_CURRENT (context, url) {
       context.commit('URL_CURRENT', url)
+    },
+    CONTROLS_UPDATE (context, data) {
+      context.commit('CONTROLS_UPDATE', data)
     }
   }
 })

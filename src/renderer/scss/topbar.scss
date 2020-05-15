@@ -32,7 +32,17 @@
       border-right: 4px solid black;
     }
   }
+  .controls {
+    > div:not(.active) {
+      cursor: not-allowed;
+    }
+    .active {
+      cursor: pointer;
+      text-shadow: 2px 2px 4px #035700;
+    }
+  }
 }
+
 #topbar-info {
   padding-right: 15px;
 }
