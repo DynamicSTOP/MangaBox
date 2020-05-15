@@ -13,6 +13,7 @@ class MainWindow {
     this._storage = null
     this._savedTraffic = 0
     this._currentSite = null
+    this._lastManga = null
 
     networkWatcher.on('loadedFromCache', this.updateSavedSize.bind(this))
 
@@ -30,6 +31,13 @@ class MainWindow {
         mangaInfoJs: fs.readFileSync(path.resolve(basePath, 'scripts', 'md_mangaInfo.js'), 'utf8')
       }]
     }
+  }
+
+  _resetParams () {
+    this._window = null
+    this._siteView = null
+    this._currentSite = null
+    this._lastManga = null
   }
 
   attachHandlers () {
@@ -74,12 +82,7 @@ class MainWindow {
 
     this._window.loadURL(winURL)
     this._window.maximize()
-
-    this._window.on('closed', () => {
-      this._window = null
-      this._siteView = null
-      this._currentSite = null
-    })
+    this._window.on('closed', this._resetParams.bind(this))
   }
 
   attachHotkeys () {
@@ -149,16 +152,6 @@ class MainWindow {
     }
   }
 
-  sendToMainView (type, data) {
-    if (this._siteView) {
-      this._siteView.webContents.send('async-main-message', {
-        sender: 'main',
-        type,
-        data
-      })
-    }
-  }
-
   setStorage (storage) {
     this._storage = storage
     networkWatcher.setStorage(storage)
@@ -180,7 +173,6 @@ class MainWindow {
 
     this._siteView = new BrowserView({
       webPreferences: {
-        // preload: path.resolve(preloadPath, 'preload_game.js'),
         nodeIntegration: false,
         nodeIntegrationInWorker: false,
         contextIsolation: true,
@@ -190,7 +182,6 @@ class MainWindow {
       }
     })
     networkWatcher.attach(this._siteView)
-    // networkWatcher.loadSettingsFromPlugin(this._currentPlugin)
     this._window.addBrowserView(this._siteView)
     this._siteView.setBounds({
       x: 0,
@@ -224,7 +215,11 @@ class MainWindow {
   setLastManga () {
     if (this._siteView && this._currentSite) {
       this._siteView.webContents.executeJavaScriptInIsolatedWorld(1, [{ code: this._currentSite.mangaInfoJs }])
-        .then(console.log)
+        .then((manga) => {
+          if (manga) {
+            this._lastManga = manga
+          }
+        })
         .catch(console.error)
     }
   }
@@ -233,7 +228,9 @@ class MainWindow {
     if (this._siteView) {
       const url = this._siteView.webContents.getURL()
       if (this.isMangaUrl(url)) {
-        console.log('adding', url)
+        if (this._lastManga) {
+          this._storage.addManga(this._lastManga)
+        }
       }
     }
   }

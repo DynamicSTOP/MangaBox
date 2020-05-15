@@ -49,34 +49,38 @@ class Storage {
   async _initDB () {
     try {
       // paths
-      await this._run('CREATE TABLE paths (url VARCHAR(255) PRIMARY KEY, path VARCHAR(255), info TEXT, stored BOOLEAN)')
+      await this._run('CREATE TABLE paths (url VARCHAR(255) PRIMARY KEY, path VARCHAR(255), info TEXT, stored BOOLEAN, time DATETIME default CURRENT_TIMESTAMP)')
       await this._run('CREATE INDEX paths_path_index ON paths (stored, path)')
 
       // manga data
       await this._run(
         'CREATE TABLE manga ' +
         '(' +
-        ' id UNSIGNED BIG INT PRIMARY KEY,' +
-        ' manga_site_id UNSIGNED BIG INT,' +
+        ' id INTEGER PRIMARY KEY AUTOINCREMENT,' +
+        ' site_id INTEGER,' +
+        ' manga_site_id INTEGER,' +
         ' url VARCHAR(255),' +
         ' title VARCHAR(255),' +
-        ' lastCheck DATETIME,' +
-        ' lastEn DATETIME,' +
-        ' lastRu DATETIME,' +
+        ' last_check DATETIME,' +
+        ' last_en DATETIME,' +
+        ' last_ru DATETIME,' +
         ' last DATETIME,' +
         ' json TEXT' +
         ')')
-      await this._run('CREATE INDEX manga_last_index ON manga (lastEn DESC, lastRu DESC, last DESC)')
+      await this._run('CREATE INDEX manga_id_index ON manga (site_id DESC, manga_site_id DESC)')
+      await this._run('CREATE INDEX manga_last_index ON manga (last_en DESC, last_ru DESC, last DESC)')
 
       // chapters
       await this._run(
         'CREATE TABLE chapters ' +
         '(' +
-        ' id UNSIGNED BIG INT PRIMARY KEY,' +
-        ' manga_id  UNSIGNED BIG INT,' +
+        ' id INTEGER PRIMARY KEY AUTOINCREMENT,' +
+        ' manga_id INTEGER,' +
+        ' manga_site_chapter_id INTEGER,' +
         ' json TEXT,' +
         ' FOREIGN KEY(manga_id) REFERENCES manga(id)' +
         ')')
+      await this._run('CREATE INDEX chapter_id_index ON chapters (manga_id DESC, manga_site_chapter_id DESC)')
     } catch (e) {
       console.error(e)
     }
@@ -89,7 +93,7 @@ class Storage {
   }
 
   async getFromPathsByUrl (url = '') {
-    const row = await this._get('SELECT url, path, info, stored FROM paths WHERE url = ? ', url)
+    const row = await this._get('SELECT * FROM paths WHERE url = ? ', url)
     if (typeof row === 'undefined') return false
     try {
       row.info = JSON.parse(row.info)
@@ -102,6 +106,47 @@ class Storage {
   async deleteFromPathsByUrl (url = '') {
     if (url === '') return false
     return await this._run('DELETE FROM paths WHERE url=?', [url])
+  }
+
+  async getManga (manga = {}) {
+    const allowedKeys = ['manga_site_id', 'site_id', 'id', 'url']
+    const where = []
+    const params = []
+    Object.keys(manga)
+      .filter((k) => allowedKeys.indexOf(k) !== -1)
+      .map((k) => {
+        where.push(`${k} = ?`)
+        params.push(manga[k])
+      })
+    if (where.length === 0) return false
+
+    const row = await this._get('SELECT * FROM manga WHERE ' + where.join(' and '), params)
+    if (typeof row === 'undefined') return false
+    try {
+      row.json = JSON.parse(row.json)
+    } catch (e) {
+      return false
+    }
+    return row
+  }
+
+  async addManga (manga = {}) {
+    const row = await this.getManga(manga)
+    console.log(row)
+    if (row) return row
+
+    const allowedKeys = ['manga_site_id', 'site_id', 'url', 'json', 'last', 'last_en', 'last_ru', 'last_check']
+    const values = []
+    const params = []
+    Object.keys(manga)
+      .filter((k) => allowedKeys.indexOf(k) !== -1)
+      .map((k) => {
+        values.push(k)
+        params.push(k === 'json' ? JSON.stringify(manga[k]) : manga[k])
+      })
+
+    await this._run('INSERT INTO manga (' + values.join(',') + ') VALUES (' + Array(values.length).fill('?').join(',') + ')', params)
+    return this.getManga(manga)
   }
 }
 

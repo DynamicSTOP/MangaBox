@@ -44,17 +44,14 @@ class NetworkWatcher extends EventEmitter {
 
   attach (view) {
     if (this._view) {
-      this.detach()
+      this._debugger.detach()
+      this._debugger = null
+      this._view = null
     }
 
     try {
       view.webContents.debugger.attach('1.3')
       this._view = view
-      this._view.webContents.on('destroyed', () => {
-        this._view = null
-        this._debugger = null
-      })
-      this._requests = {}
     } catch (err) {
       console.log('Debugger attach failed : ', err)
     }
@@ -160,7 +157,12 @@ class NetworkWatcher extends EventEmitter {
         if (responseData) {
           responseDetails.result = responseData
         } else {
-          responseDetails.result = await this._debugger.sendCommand('Fetch.getResponseBody', { requestId })
+          try {
+            responseDetails.result = await this._debugger.sendCommand('Fetch.getResponseBody', { requestId })
+          } catch (e) {
+            console.error(e)
+            return
+          }
         }
         if (method === 'POST') {
           responseDetails.post = this.getPostData(postData, headers)
@@ -356,15 +358,19 @@ class NetworkWatcher extends EventEmitter {
       if (method === 'POST') {
         info.post = this.getPostData(postData, headers)
       }
-      const result = await this._debugger.sendCommand('Fetch.getResponseBody', { requestId })
-      info.base64Encoded = result.base64Encoded
-      await this._storage.addToPaths(url, path.relative(baseDirPath, cachedPath), info, stored)
-      fs.writeFileSync(path.resolve(baseDirPath, cachedPath), result.body, result.base64Encoded ? 'base64' : 'utf8')
+      try {
+        const result = await this._debugger.sendCommand('Fetch.getResponseBody', { requestId })
+        info.base64Encoded = result.base64Encoded
+        await this._storage.addToPaths(url, path.relative(baseDirPath, cachedPath), info, stored)
+        fs.writeFileSync(path.resolve(baseDirPath, cachedPath), result.body, result.base64Encoded ? 'base64' : 'utf8')
+      } catch (e) {
+        console.error(e)
+      }
     }
   }
 
   shouldFailUrl (url) {
-    return !!url.match(/https:\/\/(www\.)?(googletagmanager|google-analytics)\.com/);
+    return !!url.match(/https:\/\/(www\.)?(googletagmanager|google-analytics)\.com/)
   }
 
   async parseMessage (event, method, params) {
@@ -375,15 +381,15 @@ class NetworkWatcher extends EventEmitter {
       const { requestId, responseHeaders } = params
       try {
         if (requestType === 'Request') {
-          if (this.shouldFailUrl(url)) {
+          if (this.shouldFailUrl(url) && this._debugger) {
             return this._debugger.sendCommand('Fetch.failRequest', {
               requestId,
               errorReason: 'Aborted'
-            })
+            }).catch(console.error)
           }
           this.emitRequest(method, url, headers)
           const cached = await this.loadFromCache(method, url, headers, params.resourceType === 'Document')
-          if (cached) {
+          if (cached && this._debugger) {
             this._debugger.sendCommand('Fetch.fulfillRequest', {
               requestId,
               responseCode: 200,
@@ -415,15 +421,13 @@ class NetworkWatcher extends EventEmitter {
       } catch (e) {
         console.error(e)
       }
-      this._debugger.sendCommand('Fetch.continueRequest', { requestId }).catch(console.error)
+      // there are awaits above. can already be dead by this point
+      if (this._debugger) {
+        this._debugger.sendCommand('Fetch.continueRequest', { requestId }).catch(console.error)
+      } else {
+        console.error('debugger is', this._debugger)
+      }
     }
-  }
-
-  detach () {
-    if (this._view) {
-      this._debugger.detach()
-    }
-    this._view = null
   }
 
   revalidate (method, info, currentHeaders = {}) {
