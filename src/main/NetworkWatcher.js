@@ -28,8 +28,6 @@ const checkRule = (rulesGroup, asRegexp = false, toLower) => {
 
 const baseDirPath = process.env.NODE_ENV === 'production' ? path.resolve('./') : path.resolve(__dirname, '..', '..')
 
-// TODO put more try catch into async funcs. it spits warnings on app close while loading stuff
-
 class NetworkWatcher extends EventEmitter {
   constructor (props) {
     super(props)
@@ -176,7 +174,6 @@ class NetworkWatcher extends EventEmitter {
     if (this.cacheRules[method]) {
       if (this.cacheRules[method] === true || this.cacheRules[method].some(r => r.test(url))) {
         const cacheControl = responseHeaders.find(h => h.name.toLowerCase() === 'cache-control')
-        // TODO no-cache implies that we can still store it, but must validate it
         if (cacheControl && cacheControl.value.toLowerCase().match(/(no-store)/)) {
           return false
         }
@@ -420,10 +417,8 @@ class NetworkWatcher extends EventEmitter {
             }
           }
         } else {
-          await Promise.all([
-            this.emitResponse(method, url, headers, responseHeaders, requestId, postData),
-            this.updateCache(method, url, headers, responseHeaders, requestId, postData)
-          ])
+          await this.updateCache(method, url, headers, responseHeaders, requestId, postData)
+          await this.emitResponse(method, url, headers, responseHeaders, requestId, postData)
         }
       } catch (e) {
         console.error(e)
