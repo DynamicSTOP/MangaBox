@@ -30,6 +30,8 @@ class MainWindow {
         type: 'manga',
         mangaRegexp: /https:\/\/mangadex\.org\/title\/(\d+)/,
         chapterRegexp: /https:\/\/mangadex\.org\/chapter\/(\d+)/,
+        mangaJSON: /https:\/\/mangadex\.org\/api\/?id=(\d+)&type=manga/,
+        chapterJSON: /https:\/\/mangadex\.org\/api\/?id=(\d+)&server=[\w\d%\-.]*&type=chapter/,
         mangaInfoJs: fs.readFileSync(path.resolve(basePath, 'scripts', 'md_mangaInfo.js'), 'utf8')
       }]
     }
