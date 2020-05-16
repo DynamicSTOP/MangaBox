@@ -4,6 +4,7 @@
   border-bottom: 2px solid #000;
   width: 100%;
   justify-content: space-between;
+  cursor: default;
 
   .openSites {
     .openSite {
@@ -19,6 +20,7 @@
       &.disabled:hover {
         cursor: not-allowed;
       }
+
       &.active {
         text-shadow: 2px 2px 4px #035700;
       }
@@ -32,15 +34,19 @@
       border-right: 4px solid black;
     }
   }
+
   .controls {
     font-weight: 800;
+
     > div:not(.active) {
       cursor: not-allowed;
     }
+
     .active {
       cursor: pointer;
       text-shadow: 2px 2px 4px #035700;
     }
+
     .disabled {
       cursor: not-allowed;
       text-shadow: none;

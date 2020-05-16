@@ -14,6 +14,7 @@ class MainWindow {
     this._savedTraffic = 0
     this._currentSite = null
     this._lastManga = null
+    this.__savedTrafficTimeout = null
 
     networkWatcher.on('loadedFromCache', this.updateSavedSize.bind(this))
 
@@ -162,7 +163,12 @@ class MainWindow {
     if (this._siteView === null) {
       this.createSiteView()
     }
-    this._siteView.webContents.once('dom-ready', () => this.sendToRenderer('SITE_NAVIGATED', url))
+    this._siteView.webContents.once('dom-ready', () => {
+      this.sendToRenderer('SITE_NAVIGATED', url)
+      if (this._savedTraffic > 0) {
+        this.updateSavedSize(0)
+      }
+    })
     this._siteView.webContents.loadURL(url)
   }
 
@@ -196,32 +202,36 @@ class MainWindow {
       height: true
     })
 
-    this._siteView.webContents.on('dom-ready', () => {
+    this._siteView.webContents.on('dom-ready', async () => {
       if (this._siteView) {
         const url = this._siteView.webContents.getURL()
         this._currentSite = this.config.sites.find((site) => url.indexOf(site.url) !== -1)
         const isManga = this.isMangaUrl(url)
+        let isMangaStored = false
+        if (isManga) {
+          await this.setLastManga()
+          isMangaStored = !!(await this._storage.getManga({
+            manga_site_id: this._lastManga.manga_site_id,
+            site_id: this._lastManga.site_id
+          }))
+        }
         this.sendToRenderer('URL_CURRENT', url)
         this.sendToRenderer('CONTROLS_UPDATE', {
           isManga,
+          isMangaStored,
           isChapter: this.isChapterUrl(url)
         })
-        if (isManga) {
-          this.setLastManga()
-        }
       }
     })
   }
 
-  setLastManga () {
+  async setLastManga () {
     if (this._siteView && this._currentSite) {
-      this._siteView.webContents.executeJavaScriptInIsolatedWorld(1, [{ code: this._currentSite.mangaInfoJs }])
-        .then((manga) => {
-          if (manga) {
-            this._lastManga = manga
-          }
-        })
-        .catch(console.error)
+      try {
+        this._lastManga = await this._siteView.webContents.executeJavaScriptInIsolatedWorld(1, [{ code: this._currentSite.mangaInfoJs }])
+      } catch (e) {
+        console.error(e)
+      }
     }
   }
 
@@ -256,7 +266,14 @@ class MainWindow {
 
   updateSavedSize (size) {
     this._savedTraffic += size
-    this.sendToRenderer('INFO_UPDATE', { savedTraffic: this._savedTraffic })
+    // should prevent 500 messages regarding saved traffic. not that important anyway
+    if (this._savedTrafficTimeout) {
+      clearTimeout(this._savedTrafficTimeout)
+    }
+    this._savedTrafficTimeout = setTimeout(() => {
+      this.sendToRenderer('INFO_UPDATE', { savedTraffic: this._savedTraffic })
+      this._savedTrafficTimeout = null
+    }, 200)
   }
 }
 

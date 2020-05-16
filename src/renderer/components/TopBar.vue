@@ -5,7 +5,7 @@ export default {
   name: 'TopBar',
   components: { OpenSite },
   computed: {
-    ...mapState(['savedTraffic', 'sites', 'isManga', 'isAddingManga']),
+    ...mapState(['savedTraffic', 'sites', 'isManga', 'isAddingManga', 'isMangaStored']),
     infoTitle () {
       return `loaded ${this.savedTraffic} bytes from cache`
     },
@@ -14,11 +14,14 @@ export default {
     },
     isDisabled () {
       return !this.isManga || this.isAddingManga
+    },
+    isActive () {
+      return this.isManga && !this.isMangaStored
     }
   },
   methods: {
     add () {
-      if (this.isManga) {
+      if (this.isActive) {
         this.$store.dispatch('MANGA_ADD')
       }
     }
@@ -48,10 +51,14 @@ export default {
       </div>
       <div class="controls">
         <div
-          :class="{active:isManga, disabled: isDisabled}"
+          v-show="isActive"
+          :class="{active:isActive, disabled: isDisabled}"
           @click="add"
         >
           Add
+        </div>
+        <div v-if="isMangaStored">
+          stored
         </div>
       </div>
     </div>

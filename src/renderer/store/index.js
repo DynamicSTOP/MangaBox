@@ -14,7 +14,8 @@ const store = new Vuex.Store({
     currentURL: null,
     isManga: false,
     isChapter: false,
-    isAddingManga: false
+    isAddingManga: false,
+    isMangaStored: false
   },
   getters: {
     isManga (state) {
@@ -48,6 +49,7 @@ const store = new Vuex.Store({
     },
     CONTROLS_UPDATE (store, data) {
       store.isManga = data.isManga
+      store.isMangaStored = data.isMangaStored
       store.isChapter = data.isChapter
     },
     MANGA_ADD (store) {
@@ -57,6 +59,7 @@ const store = new Vuex.Store({
     },
     MANGA_ADDED (store, manga) {
       store.isAddingManga = false
+      store.isMangaStored = true
     }
   },
   actions: {
