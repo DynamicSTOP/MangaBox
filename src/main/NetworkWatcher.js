@@ -9,14 +9,21 @@ const getSHA = (data) => {
   return crypto.createHash('sha256').update(data).digest('hex')
 }
 const checkRule = (rulesGroup, asRegexp = false, toLower) => {
+  if (typeof rulesGroup === 'undefined') return false
   if (rulesGroup instanceof Array) {
-    rulesGroup = rulesGroup.filter((r) => typeof r === 'string').filter((r) => r.length > 0)
-    if (toLower) {
-      rulesGroup = rulesGroup.map((r) => r.toLowerCase())
-    }
-    if (asRegexp) {
-      rulesGroup = rulesGroup.map((r) => new RegExp(r))
-    }
+    rulesGroup = rulesGroup.map((r) => {
+      if (r instanceof RegExp) return r
+      if (typeof r === 'string' && r.length > 0) {
+        if (toLower) {
+          r = r.toLowerCase()
+        }
+        if (asRegexp) {
+          r = new RegExp(r)
+        }
+        return r
+      }
+      return false
+    }).filter((r) => r !== false)
     if (rulesGroup.length === 0) {
       rulesGroup = false
     }
@@ -36,7 +43,7 @@ class NetworkWatcher extends EventEmitter {
     this._cacheDirectory = path.resolve(baseDirPath, 'cache')
     this._debug = process.env.NODE_ENV === 'development'
     this._storage = false
-    this.loadWatcherRules()
+    this.watcherRulesSets = []
     this.loadCacheRules()
   }
 
@@ -61,20 +68,18 @@ class NetworkWatcher extends EventEmitter {
     }
   }
 
-  loadWatcherRules (rules = {}) {
-    this.watcherRules = {
-      request: false,
-      response: false,
-      headers: false
+  addWatcherRules (rulesSet = {}) {
+    if (!rulesSet) return
+    const { headers, response, request, marker } = rulesSet
+    rulesSet.request = checkRule(request, true)
+    rulesSet.response = checkRule(response, true)
+    rulesSet.headers = checkRule(headers, false, true)
+    if (marker && this.watcherRulesSets.some(s => s.marker === marker)) {
+      const index = this.watcherRulesSets.findIndex(s => s.marker === marker)
+      this.watcherRulesSets[index] = rulesSet
+    } else {
+      this.watcherRulesSets.push(rulesSet)
     }
-    Object.assign(this.watcherRules, rules)
-    this.validateWatcherRules()
-  }
-
-  validateWatcherRules () {
-    this.watcherRules.request = checkRule(this.watcherRules.request, true)
-    this.watcherRules.response = checkRule(this.watcherRules.response, true)
-    this.watcherRules.headers = checkRule(this.watcherRules.headers, false, true)
   }
 
   loadCacheRules (rules = {}) {
@@ -95,8 +100,8 @@ class NetworkWatcher extends EventEmitter {
     this.cacheRules.POST = checkRule(this.cacheRules.POST, true)
   }
 
-  filterHeaders (headers) {
-    if (this.watcherRules.headers === false) {
+  filterHeaders (headers, rulesSet = {}) {
+    if (rulesSet.headers === false) {
       return {}
     }
 
@@ -104,14 +109,14 @@ class NetworkWatcher extends EventEmitter {
     if (headers instanceof Array) {
       // response is like this { name: 'status', value: '200' },
       headers.map((oldHeader) => {
-        if (this.watcherRules.headers === true || this.watcherRules.headers.indexOf(oldHeader.name.toLowerCase()) !== -1) {
+        if (rulesSet.headers === true || rulesSet.headers.indexOf(oldHeader.name.toLowerCase()) !== -1) {
           filteredHeaders[oldHeader.name.toLowerCase()] = oldHeader.value
         }
       })
       return filteredHeaders
     } else if (typeof headers === 'object') {
       Object.keys(headers).map((oldHeader) => {
-        if (this.watcherRules.headers === true || this.watcherRules.headers.indexOf(oldHeader.toLowerCase()) !== -1) {
+        if (rulesSet.headers === true || rulesSet.headers.indexOf(oldHeader.toLowerCase()) !== -1) {
           filteredHeaders[oldHeader.toLowerCase()] = headers[oldHeader]
         }
       })
@@ -132,29 +137,38 @@ class NetworkWatcher extends EventEmitter {
   }
 
   emitRequest (method, url, headers) {
-    if (this.watcherRules.request !== false) {
-      if (this.watcherRules.request === true || this.watcherRules.request.some(r => r.test(url))) {
-        this.emit('Request', {
-          method: method,
-          url: url,
-          headers: this.filterHeaders(headers)
+    if (this.watcherRulesSets.some((s) => s.request !== false).length !== 0) {
+      this.watcherRulesSets.filter((set) => set.request === true || (set.request !== false && set.request.some(r => r.test(url))))
+        .map((set) => {
+          this.emit('Request', {
+            marker: set.marker,
+            method: method,
+            url: url,
+            headers: this.filterHeaders(headers, set)
+          })
         })
-      }
     }
   }
 
   async emitResponse (method, url, headers, responseHeaders, requestId, postData, responseData = false) {
-    if (this.watcherRules.response !== false) {
-      if (this.watcherRules.response === true || this.watcherRules.response.some(r => r.test(url))) {
-        const responseDetails = {
-          method,
-          url,
-          headers: this.filterHeaders(headers),
-          responseHeaders: this.filterHeaders(responseHeaders)
-        }
-        if (responseData) {
-          responseDetails.result = responseData
-        } else {
+    if (this.watcherRulesSets.some((s) => s.response !== false).length !== 0) {
+      const sets = this.watcherRulesSets.filter((set) => set.response === true || (set.response !== false && set.response.some(r => r.test(url))))
+      if (sets.length === 0) return
+      const responseDetails = {
+        method,
+        url
+      }
+      if (responseData) {
+        responseDetails.result = responseData
+      }
+      if (method === 'POST') {
+        responseDetails.post = this.getPostData(postData, headers)
+      }
+      sets.map(async (set) => {
+        responseDetails.marker = set.marker
+        responseDetails.headers = this.filterHeaders(headers, set)
+        responseDetails.responseHeaders = this.filterHeaders(responseHeaders, set)
+        if (!responseDetails.result) {
           try {
             responseDetails.result = await this._debugger.sendCommand('Fetch.getResponseBody', { requestId })
           } catch (e) {
@@ -162,11 +176,8 @@ class NetworkWatcher extends EventEmitter {
             return
           }
         }
-        if (method === 'POST') {
-          responseDetails.post = this.getPostData(postData, headers)
-        }
         this.emit('Response', responseDetails)
-      }
+      })
     }
   }
 

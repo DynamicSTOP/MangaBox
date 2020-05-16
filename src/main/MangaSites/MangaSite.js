@@ -73,4 +73,23 @@ export class MangaSite {
   testURL (url) {
     return url.match(this.pattern)
   }
+
+  getNetworkWatcherRulesSet () {
+    // false
+    // or something like this
+    // {
+    //   request: false,
+    //   response: [/\/api\//, /\.json/],
+    //   headers: true
+    // }
+    return false
+  }
+
+  parseRequest (request) {
+    console.log('request in ' + this.name, request)
+  }
+
+  parseResponse (response) {
+    console.log('response in ' + this.name, response)
+  }
 }

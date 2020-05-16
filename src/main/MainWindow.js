@@ -16,9 +16,10 @@ class MainWindow {
     this._currentSite = null
     this._lastManga = null
     this.__savedTrafficTimeout = null
+    this.sites = []
 
     networkWatcher.on('loadedFromCache', this.updateSavedSize.bind(this))
-    this.sites = [new Google(), new MangaDex()]
+    this.addSites()
   }
 
   _resetParams () {
@@ -26,6 +27,30 @@ class MainWindow {
     this._siteView = null
     this._currentSite = null
     this._lastManga = null
+  }
+
+  addSites () {
+    this.sites = [new Google(), new MangaDex()]
+    this.sites.map((site) => {
+      const rules = site.getNetworkWatcherRulesSet()
+      if (!rules) return
+      rules.marker = site.id
+      networkWatcher.addWatcherRules(rules)
+    })
+    networkWatcher.on('Request', (request) => {
+      this.sites.map((site) => {
+        if (site.id === request.marker) {
+          site.parseRequest(request)
+        }
+      })
+    })
+    networkWatcher.on('Response', (response) => {
+      this.sites.map((site) => {
+        if (site.id === response.marker) {
+          site.parseResponse(response)
+        }
+      })
+    })
   }
 
   attachHandlers () {

@@ -25,6 +25,20 @@ class MangaDex extends MangaSite {
   async getMangaInfo (view) {
     return view.webContents.executeJavaScriptInIsolatedWorld(1, [{ code: this.mangaInfoJs }])
   }
+
+  getNetworkWatcherRulesSet () {
+    return {
+      response: [/\/api\//, /\.json/]
+    }
+  }
+
+  parseRequest (request) {
+    console.log('request in ' + this.name, request.url)
+  }
+
+  parseResponse (response) {
+    console.log('response in ' + this.name, response.url)
+  }
 }
 
 export default MangaDex
