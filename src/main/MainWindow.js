@@ -1,7 +1,8 @@
 import { ipcMain, globalShortcut, BrowserWindow, BrowserView, screen, session } from 'electron'
 import path from 'path'
-import fs from 'fs'
 import { networkWatcher, getFileExtensionFromHeaders } from './NetworkWatcher'
+import Google from './MangaSites/Google'
+import MangaDex from './MangaSites/MangaDex'
 
 const basePath = process.env.NODE_ENV === 'production' ? path.resolve(__dirname) : path.resolve(__dirname, '..')
 
@@ -17,24 +18,7 @@ class MainWindow {
     this.__savedTrafficTimeout = null
 
     networkWatcher.on('loadedFromCache', this.updateSavedSize.bind(this))
-
-    this.config = {
-      // TODO refactor sites to separate classes with some interface
-      sites: [{
-        text: 'Google',
-        url: 'https://www.google.com'
-      }, {
-        siteId: 0,
-        text: 'MangaDex',
-        url: 'https://mangadex.org',
-        type: 'manga',
-        mangaRegexp: /https:\/\/mangadex\.org\/title\/(\d+)/,
-        chapterRegexp: /https:\/\/mangadex\.org\/chapter\/(\d+)/,
-        mangaJSON: /https:\/\/mangadex\.org\/api\/?id=(\d+)&type=manga/,
-        chapterJSON: /https:\/\/mangadex\.org\/api\/?id=(\d+)&server=[\w\d%\-.]*&type=chapter/,
-        mangaInfoJs: fs.readFileSync(path.resolve(basePath, 'scripts', 'md_mangaInfo.js'), 'utf8')
-      }]
-    }
+    this.sites = [new Google(), new MangaDex()]
   }
 
   _resetParams () {
@@ -126,7 +110,15 @@ class MainWindow {
   parseMessageFromRenderer (type, data) {
     switch (type) {
       case 'APP_LOADED':
-        this.sendToRenderer('APP_CONFIG', this.config)
+        this.sendToRenderer('APP_CONFIG', {
+          sites: this.sites.map((s, i) => {
+            return {
+              index: i,
+              text: s.name,
+              pattern: s.pattern
+            }
+          })
+        })
         break
       case 'SITE_NAVIGATE':
         this.siteNavigate(data)
@@ -161,17 +153,18 @@ class MainWindow {
     networkWatcher.setStorage(storage)
   }
 
-  siteNavigate (url) {
+  siteNavigate (index) {
+    if (index >= this.sites.length) return
     if (this._siteView === null) {
       this.createSiteView()
     }
     this._siteView.webContents.once('dom-ready', () => {
-      this.sendToRenderer('SITE_NAVIGATED', url)
+      this.sendToRenderer('SITE_NAVIGATED', this.sites[index].indexPage)
       if (this._savedTraffic > 0) {
         this.updateSavedSize(0)
       }
     })
-    this._siteView.webContents.loadURL(url)
+    this._siteView.webContents.loadURL(this.sites[index].indexPage)
   }
 
   createSiteView () {
@@ -207,8 +200,8 @@ class MainWindow {
     this._siteView.webContents.on('dom-ready', async () => {
       if (this._siteView) {
         const url = this._siteView.webContents.getURL()
-        this._currentSite = this.config.sites.find((site) => url.indexOf(site.url) !== -1)
-        const isManga = this.isMangaUrl(url)
+        this._currentSite = this.sites.find((site) => site.testURL(url))
+        const isManga = this.isMangaURL(url)
         let isMangaStored = false
         if (isManga) {
           await this.setLastManga()
@@ -221,7 +214,7 @@ class MainWindow {
         this.sendToRenderer('CONTROLS_UPDATE', {
           isManga,
           isMangaStored,
-          isChapter: this.isChapterUrl(url)
+          isChapter: this.isChapterURL(url)
         })
       }
     })
@@ -230,7 +223,7 @@ class MainWindow {
   async setLastManga () {
     if (this._siteView && this._currentSite) {
       try {
-        this._lastManga = await this._siteView.webContents.executeJavaScriptInIsolatedWorld(1, [{ code: this._currentSite.mangaInfoJs }])
+        this._lastManga = await this._currentSite.getMangaInfo(this._siteView)
       } catch (e) {
         console.error(e)
       }
@@ -250,7 +243,7 @@ class MainWindow {
   async addManga () {
     if (this._siteView) {
       const url = this._siteView.webContents.getURL()
-      if (this.isMangaUrl(url) && this._lastManga) {
+      if (this.isMangaURL(url) && this._lastManga) {
         const manga = await this._storage.addManga(this._lastManga)
         await this.saveMangaImage(manga)
         this.sendToRenderer('MANGA_ADDED', manga)
@@ -258,12 +251,12 @@ class MainWindow {
     }
   }
 
-  isMangaUrl (url) {
-    return !!this._currentSite && this._currentSite.type === 'manga' && this._currentSite.mangaRegexp.test(url)
+  isMangaURL (url) {
+    return this._currentSite && this._currentSite.isMangaURL(url)
   }
 
-  isChapterUrl (url) {
-    return this.config.sites.some((site) => site.type === 'manga' && site.mangaRegexp.test(url))
+  isChapterURL (url) {
+    return this._currentSite && this._currentSite.isMangaChapterURL(url)
   }
 
   updateSavedSize (size) {

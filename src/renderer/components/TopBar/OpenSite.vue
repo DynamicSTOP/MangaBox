@@ -3,11 +3,15 @@ import { mapState } from 'vuex'
 export default {
   name: 'OpenSite',
   props: {
+    index: {
+      type: Number,
+      required: true
+    },
     text: {
       type: String,
       required: true
     },
-    url: {
+    pattern: {
       type: String,
       required: true
     }
@@ -15,12 +19,12 @@ export default {
   computed: {
     ...mapState(['isNavigating', 'currentURL']),
     isActive () {
-      return this.currentURL && this.currentURL.indexOf(this.url) === 0
+      return this.currentURL && this.currentURL.match(this.pattern)
     }
   },
   methods: {
     openSite () {
-      this.$store.dispatch('SITE_NAVIGATE', this.url)
+      this.$store.dispatch('SITE_NAVIGATE', this.index)
     }
   }
 }

@@ -53,7 +53,7 @@ class NetworkWatcher extends EventEmitter {
       view.webContents.debugger.attach('1.3')
       this._view = view
     } catch (err) {
-      console.log('Debugger attach failed : ', err)
+      console.error('Debugger attach failed : ', err)
     }
 
     if (this._view) {
@@ -177,7 +177,10 @@ class NetworkWatcher extends EventEmitter {
       if (this.cacheRules[method] === true || this.cacheRules[method].some(r => r.test(url))) {
         const cacheControl = responseHeaders.find(h => h.name.toLowerCase() === 'cache-control')
         // TODO no-cache implies that we can still store it, but must validate it
-        if (cacheControl && cacheControl.value.toLowerCase().match(/no-store/)) {
+        if (cacheControl && cacheControl.value.toLowerCase().match(/(no-store)/)) {
+          return false
+        }
+        if (responseHeaders.find(h => ['authorization', 'set-cookie'].indexOf(h.name.toLowerCase()) !== -1)) {
           return false
         }
         return true
@@ -214,7 +217,7 @@ class NetworkWatcher extends EventEmitter {
               info = {
                 url,
                 headers,
-                responseHeaders: validation.headers.filter(h => ['cookie', 'authorization', 'age'].indexOf(h.name) === -1),
+                responseHeaders: validation.responseHeaders.filter(h => ['set-cookie', 'authorization', 'age'].indexOf(h.name) === -1),
                 base64Encoded: true
               }
             }
@@ -224,7 +227,7 @@ class NetworkWatcher extends EventEmitter {
               const cacheControlInfo = this.getCacheControlInfo(cacheControl, expireDate)
               Object.assign(info, cacheControlInfo)
               info.date = new Date().getTime()
-              info.headers = validation.headers.filter(h => ['cookie', 'authorization', 'age'].indexOf(h.name) === -1)
+              info.responseHeaders = validation.responseHeaders.filter(h => ['set-cookie', 'authorization', 'age'].indexOf(h.name) === -1)
               await this._storage.addToPaths(url, path.relative(baseDirPath, cachedPath), info, stored)
             } else {
               return false
@@ -390,27 +393,31 @@ class NetworkWatcher extends EventEmitter {
           this.emitRequest(method, url, headers)
           const cached = await this.loadFromCache(method, url, headers, params.resourceType === 'Document')
           if (cached && this._debugger) {
-            this._debugger.sendCommand('Fetch.fulfillRequest', {
-              requestId,
-              responseCode: 200,
-              responseHeaders: cached.headers,
-              body: cached.body
-            }).catch(console.error)
-            await this.emitResponse(method, url, headers, responseHeaders, requestId, postData, {
-              base64Encoded: true,
-              body: cached.body
-            })
-            if (!cached.redownloaded) {
-              if (cached.body.length > 0) {
-                let size = (cached.body.length / 4) * 3
-                const match = cached.body.match(/(=+)$/)
-                if (match) {
-                  size -= match[1].length
+            try {
+              await this._debugger.sendCommand('Fetch.fulfillRequest', {
+                requestId,
+                responseCode: 200,
+                responseHeaders: cached.headers,
+                body: cached.body
+              })
+              await this.emitResponse(method, url, headers, responseHeaders, requestId, postData, {
+                base64Encoded: true,
+                body: cached.body
+              })
+              if (!cached.redownloaded) {
+                if (cached.body.length > 0) {
+                  let size = (cached.body.length / 4) * 3
+                  const match = cached.body.match(/(=+)$/)
+                  if (match) {
+                    size -= match[1].length
+                  }
+                  this.emit('loadedFromCache', size)
                 }
-                this.emit('loadedFromCache', size)
               }
+              return
+            } catch (e) {
+              console.error('ERROR in Fetch.fulfillRequest', url, e.message, e)
             }
-            return
           }
         } else {
           await Promise.all([
@@ -465,7 +472,7 @@ class NetworkWatcher extends EventEmitter {
           resolve({
             result: true,
             statusCode: result.statusCode,
-            headers: Object.keys(result.headers).map(k => {
+            responseHeaders: Object.keys(result.headers).map(k => {
               return {
                 name: k.toLowerCase(),
                 value: result.headers[k]

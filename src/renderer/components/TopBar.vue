@@ -37,9 +37,10 @@ export default {
     <div class="openSites flex-row">
       <open-site
         v-for="site in sites"
-        :key="'os_'+site.text"
+        :key="'os_'+site.index"
         :text="site.text"
-        :url="site.url"
+        :pattern="site.pattern"
+        :index="site.index"
       />
     </div>
     <div class="topbar-right flex-row">
