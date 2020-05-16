@@ -1,7 +1,7 @@
 import { ipcMain, globalShortcut, BrowserWindow, BrowserView, screen, session } from 'electron'
 import path from 'path'
 import fs from 'fs'
-import networkWatcher from './NetworkWatcher'
+import { networkWatcher, getFileExtensionFromHeaders } from './NetworkWatcher'
 
 const basePath = process.env.NODE_ENV === 'production' ? path.resolve(__dirname) : path.resolve(__dirname, '..')
 
@@ -18,6 +18,7 @@ class MainWindow {
     networkWatcher.on('loadedFromCache', this.updateSavedSize.bind(this))
 
     this.config = {
+      // TODO refactor sites to separate classes with some interface
       sites: [{
         text: 'Google',
         url: 'https://www.google.com'
@@ -224,13 +225,23 @@ class MainWindow {
     }
   }
 
-  addManga () {
+  async saveMangaImage (manga = {}) {
+    if (manga.json && manga.json.image) {
+      const row = await this._storage.getFromPathsByUrl(manga.json.image)
+      if (row && row.stored === false) {
+        const ext = getFileExtensionFromHeaders(row.info.responseHeaders)
+        await this._storage.moveCachedFile(row.path, `manga${path.sep}${manga.id}${ext}`)
+      }
+    }
+  }
+
+  async addManga () {
     if (this._siteView) {
       const url = this._siteView.webContents.getURL()
-      if (this.isMangaUrl(url)) {
-        if (this._lastManga) {
-          this._storage.addManga(this._lastManga)
-        }
+      if (this.isMangaUrl(url) && this._lastManga) {
+        const manga = await this._storage.addManga(this._lastManga)
+        await this.saveMangaImage(manga)
+        this.sendToRenderer('MANGA_ADDED', manga)
       }
     }
   }

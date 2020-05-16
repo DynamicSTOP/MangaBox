@@ -42,6 +42,9 @@ export class MessageParser {
       case 'URL_CURRENT':
         this.store.commit('URL_CURRENT', message.data)
         break
+      case 'MANGA_ADDED':
+        this.store.commit('MANGA_ADDED', message.data)
+        break
       case 'CONTROLS_UPDATE':
         this.store.commit('CONTROLS_UPDATE', message.data)
         break

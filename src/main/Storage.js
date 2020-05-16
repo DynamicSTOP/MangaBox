@@ -97,6 +97,20 @@ class Storage {
     if (typeof row === 'undefined') return false
     try {
       row.info = JSON.parse(row.info)
+      row.stored = !!row.stored
+    } catch (e) {
+      return false
+    }
+    return row
+  }
+
+  async moveCachedFile (pathFrom = '', pathTo = '', stored = true) {
+    let row = await this._get('SELECT * FROM paths WHERE path = ?', [pathFrom])
+    if (typeof row === 'undefined') return false
+    try {
+      fs.renameSync(path.resolve(basePath, pathFrom), path.resolve(basePath, pathTo))
+      await this._run('UPDATE paths SET path = ?, stored = ? WHERE path = ?', [pathTo, stored, pathFrom])
+      row = await this.getFromPathsByUrl(row.url)
     } catch (e) {
       return false
     }
@@ -132,7 +146,6 @@ class Storage {
 
   async addManga (manga = {}) {
     const row = await this.getManga(manga)
-    console.log(row)
     if (row) return row
 
     const allowedKeys = ['manga_site_id', 'site_id', 'url', 'json', 'last', 'last_en', 'last_ru', 'last_check']
@@ -146,7 +159,7 @@ class Storage {
       })
 
     await this._run('INSERT INTO manga (' + values.join(',') + ') VALUES (' + Array(values.length).fill('?').join(',') + ')', params)
-    return this.getManga(manga)
+    return await this.getManga(manga)
   }
 }
 

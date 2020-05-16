@@ -485,5 +485,31 @@ class NetworkWatcher extends EventEmitter {
   }
 }
 
-const nw = new NetworkWatcher()
-export default nw
+export const networkWatcher = new NetworkWatcher()
+
+export const getFileExtensionFromHeaders = (responseHeaders) => {
+  const contentType = responseHeaders.find(h => h.name === 'content-type')
+  if (contentType) {
+    switch (contentType.value) {
+      case 'image/jpeg':
+        return '.jpg'
+      case 'image/png':
+        return '.png'
+      case 'image/gif':
+        return '.gif'
+      case 'image/webp':
+        return '.webp'
+      case 'image/apng':
+        return '.apng'
+      case 'image/bmp':
+        return '.bmp'
+      case 'image/x-icon':
+        return '.x-icon'
+      case 'image/svg+xml':
+        return '.svg'
+      case 'image/tiff':
+        return '.tiff'
+    }
+  }
+  return ''
+}

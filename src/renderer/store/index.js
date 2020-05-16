@@ -54,6 +54,9 @@ const store = new Vuex.Store({
       if (store.isAddingManga) return
       store.isAddingManga = true
       sendMessageToMain('MANGA_ADD')
+    },
+    MANGA_ADDED (store, manga) {
+      store.isAddingManga = false
     }
   },
   actions: {
@@ -74,6 +77,9 @@ const store = new Vuex.Store({
     },
     MANGA_ADD (context) {
       context.commit('MANGA_ADD')
+    },
+    MANGA_ADDED (context, manga) {
+      context.commit('MANGA_ADDED', manga)
     }
   }
 })
