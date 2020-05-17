@@ -1,4 +1,5 @@
 import path from 'path'
+import { getFileExtensionFromHeaders } from '../NetworkWatcher'
 
 export const basePath = process.env.NODE_ENV === 'production' ? path.resolve(__dirname) : path.resolve(__dirname, '..', '..')
 
@@ -27,21 +28,53 @@ export class MangaSite {
      * @type {string}
      */
     this.indexPage = 'https://example.com'
+
+    /**
+     * @type {Storage}
+     */
+    this._storage = null
+
+    /**
+     * @type {string}
+     */
+    this._url = ''
   }
 
   /**
    * @param url
    * @returns {boolean}
    */
-  isMangaURL (url) {
+  isMangaURL (url = this._url) {
     return false
   }
 
   /**
+   *
+   * @param storage {Storage}
+   */
+  setStorage (storage) {
+    this._storage = storage
+  }
+
+  /**
    * @param url
    * @returns {boolean}
    */
-  isMangaChapterURL (url) {
+  isMangaChapterURL (url = this._url) {
+    return false
+  }
+
+  /**
+   * if this._lastManga is in storage
+   * @returns {Promise<boolean>}
+   */
+  async isMangaStored () {
+    if (this.isMangaURL(this._url) && this._storage && this._lastManga) {
+      return !!(await this._storage.getManga({
+        manga_site_id: this._lastManga.manga_site_id,
+        site_id: this.id
+      }))
+    }
     return false
   }
 
@@ -85,11 +118,70 @@ export class MangaSite {
     return false
   }
 
-  parseRequest (request) {
+  parseRequest (request = {}) {
     console.log('request in ' + this.name, request)
   }
 
-  parseResponse (response) {
+  parseResponse (response = {}) {
     console.log('response in ' + this.name, response)
+  }
+
+  /**
+   *
+   * @param url {string}
+   * @param view {BrowserView}
+   * @returns {Promise<boolean>}
+   */
+  async updateStatus (url = '', view) {
+    this._url = url
+    if (this.isMangaURL(this._url)) {
+      await this.updateLastManga(view)
+    } else {
+      this._lastManga = false
+    }
+    return false
+  }
+
+  /**
+   *
+   * @param view
+   * @returns {Promise<Object|false>}
+   */
+  async updateLastManga (view) {
+    try {
+      this._lastManga = await this.getMangaInfo(view)
+    } catch (e) {
+      this._lastManga = false
+    }
+    return this._lastManga
+  }
+
+  /**
+   *
+   * @param manga
+   * @returns {Promise<void>}
+   */
+  async saveMangaImage (manga = {}) {
+    if (manga.json && manga.json.image) {
+      const row = await this._storage.getFromPathsByUrl(manga.json.image)
+      if (row && row.stored === false) {
+        const ext = getFileExtensionFromHeaders(row.info.responseHeaders)
+        await this._storage.moveCachedFile(row.path, `manga${path.sep}${manga.id}${ext}`)
+      }
+    }
+  }
+
+  /**
+   *
+   * @returns {Promise<Object|false>}
+   */
+  async addManga () {
+    console.log(this._storage, this._lastManga)
+    if (this._lastManga && this._storage) {
+      const manga = await this._storage.addManga(this._lastManga)
+      await this.saveMangaImage(manga)
+      return manga
+    }
+    return false
   }
 }

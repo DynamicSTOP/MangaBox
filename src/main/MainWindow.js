@@ -1,8 +1,10 @@
 import { ipcMain, globalShortcut, BrowserWindow, BrowserView, screen, session } from 'electron'
 import path from 'path'
-import { networkWatcher, getFileExtensionFromHeaders } from './NetworkWatcher'
+import { networkWatcher } from './NetworkWatcher'
 import Google from './MangaSites/Google'
 import MangaDex from './MangaSites/MangaDex'
+
+const enabledSites = [Google, MangaDex]
 
 const basePath = process.env.NODE_ENV === 'production' ? path.resolve(__dirname) : path.resolve(__dirname, '..')
 
@@ -30,7 +32,7 @@ class MainWindow {
   }
 
   addSites () {
-    this.sites = [new Google(), new MangaDex()]
+    this.sites = enabledSites.map((SiteConstructor) => new SiteConstructor(this._storage))
     this.sites.map((site) => {
       const rules = site.getNetworkWatcherRulesSet()
       if (!rules) return
@@ -121,18 +123,18 @@ class MainWindow {
   attachMessenger () {
     ipcMain.removeAllListeners('async-renderer-message')
 
-    ipcMain.on('async-renderer-message', (event, message) => {
+    ipcMain.on('async-renderer-message', async (event, message) => {
       try {
         const json = JSON.parse(message)
         const { data, type } = json
-        this.parseMessageFromRenderer(type, data)
+        await this.parseMessageFromRenderer(type, data)
       } catch (e) {
         console.error(e)
       }
     })
   }
 
-  parseMessageFromRenderer (type, data) {
+  async parseMessageFromRenderer (type, data) {
     switch (type) {
       case 'APP_LOADED':
         this.sendToRenderer('APP_CONFIG', {
@@ -149,7 +151,10 @@ class MainWindow {
         this.siteNavigate(data)
         break
       case 'MANGA_ADD':
-        this.addManga()
+        if (this._currentSite) {
+          const manga = await this._currentSite.addManga()
+          this.sendToRenderer('MANGA_ADDED', manga)
+        }
         break
       default:
         if (this._debug) {
@@ -175,6 +180,7 @@ class MainWindow {
 
   setStorage (storage) {
     this._storage = storage
+    this.sites.map((site) => site.setStorage(storage))
     networkWatcher.setStorage(storage)
   }
 
@@ -225,63 +231,26 @@ class MainWindow {
     this._siteView.webContents.on('dom-ready', async () => {
       if (this._siteView) {
         const url = this._siteView.webContents.getURL()
-        this._currentSite = this.sites.find((site) => site.testURL(url))
-        const isManga = this.isMangaURL(url)
-        let isMangaStored = false
-        if (isManga) {
-          await this.setLastManga()
-          isMangaStored = !!(await this._storage.getManga({
-            manga_site_id: this._lastManga.manga_site_id,
-            site_id: this._lastManga.site_id
-          }))
-        }
         this.sendToRenderer('URL_CURRENT', url)
-        this.sendToRenderer('CONTROLS_UPDATE', {
-          isManga,
-          isMangaStored,
-          isChapter: this.isChapterURL(url)
-        })
+
+        this._currentSite = this.sites.find((site) => site.testURL(url))
+        if (this._currentSite) {
+          await this._currentSite.updateStatus(url, this._siteView)
+
+          this.sendToRenderer('CONTROLS_UPDATE', {
+            isManga: this._currentSite.isMangaURL(),
+            isMangaStored: await this._currentSite.isMangaStored(),
+            isChapter: this._currentSite.isMangaChapterURL()
+          })
+        } else {
+          this.sendToRenderer('CONTROLS_UPDATE', {
+            isManga: false,
+            isMangaStored: false,
+            isChapter: false
+          })
+        }
       }
     })
-  }
-
-  async setLastManga () {
-    if (this._siteView && this._currentSite) {
-      try {
-        this._lastManga = await this._currentSite.getMangaInfo(this._siteView)
-      } catch (e) {
-        console.error(e)
-      }
-    }
-  }
-
-  async saveMangaImage (manga = {}) {
-    if (manga.json && manga.json.image) {
-      const row = await this._storage.getFromPathsByUrl(manga.json.image)
-      if (row && row.stored === false) {
-        const ext = getFileExtensionFromHeaders(row.info.responseHeaders)
-        await this._storage.moveCachedFile(row.path, `manga${path.sep}${manga.id}${ext}`)
-      }
-    }
-  }
-
-  async addManga () {
-    if (this._siteView) {
-      const url = this._siteView.webContents.getURL()
-      if (this.isMangaURL(url) && this._lastManga) {
-        const manga = await this._storage.addManga(this._lastManga)
-        await this.saveMangaImage(manga)
-        this.sendToRenderer('MANGA_ADDED', manga)
-      }
-    }
-  }
-
-  isMangaURL (url) {
-    return this._currentSite && this._currentSite.isMangaURL(url)
-  }
-
-  isChapterURL (url) {
-    return this._currentSite && this._currentSite.isMangaChapterURL(url)
   }
 
   updateSavedSize (size) {

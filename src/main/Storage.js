@@ -122,6 +122,11 @@ class Storage {
     return await this._run('DELETE FROM paths WHERE url=?', [url])
   }
 
+  /**
+   *
+   * @param manga
+   * @returns {Promise<Object|false>}
+   */
   async getManga (manga = {}) {
     const allowedKeys = ['manga_site_id', 'site_id', 'id', 'url']
     const where = []
@@ -144,6 +149,11 @@ class Storage {
     return row
   }
 
+  /**
+   *
+   * @param manga
+   * @returns {Promise<Object|false>}
+   */
   async addManga (manga = {}) {
     const row = await this.getManga(manga)
     if (row) return row

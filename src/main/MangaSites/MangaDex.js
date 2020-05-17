@@ -14,7 +14,7 @@ class MangaDex extends MangaSite {
     this.mangaInfoJs = fs.readFileSync(path.resolve(basePath, 'scripts', 'md_mangaInfo.js'), 'utf8')
   }
 
-  isMangaURL (url) {
+  isMangaURL (url = this._url) {
     return /https:\/\/mangadex\.org\/title\/(\d+)/.test(url)
   }
 
@@ -34,11 +34,11 @@ class MangaDex extends MangaSite {
   }
 
   parseRequest (request) {
-    console.log('request in ' + this.name, request.url)
+    // console.log('request in ' + this.name, request.url)
   }
 
   parseResponse (response) {
-    console.log('response in ' + this.name, response.url, response.headers)
+    // console.log('response in ' + this.name, response.url, response.headers)
   }
 }
 
