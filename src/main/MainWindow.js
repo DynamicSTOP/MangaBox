@@ -134,7 +134,13 @@ class MainWindow {
     })
   }
 
-  async parseMessageFromRenderer (type, data) {
+  /**
+   *
+   * @param type {string}
+   * @param data {Object|undefined}
+   * @returns {Promise<void>}
+   */
+  async parseMessageFromRenderer (type = '', data) {
     switch (type) {
       case 'APP_LOADED':
         this.sendToRenderer('APP_CONFIG', {
@@ -168,6 +174,11 @@ class MainWindow {
     }
   }
 
+  /**
+   *
+   * @param type {string}
+   * @param data {Object|undefined}
+   */
   sendToRenderer (type, data) {
     if (this._window) {
       this._window.send('async-main-message', JSON.stringify({
@@ -178,13 +189,21 @@ class MainWindow {
     }
   }
 
+  /**
+   *
+   * @param storage {Storage}
+   */
   setStorage (storage) {
     this._storage = storage
     this.sites.map((site) => site.setStorage(storage))
     networkWatcher.setStorage(storage)
   }
 
-  siteNavigate (index) {
+  /**
+   *
+   * @param index {number}
+   */
+  siteNavigate (index = 0) {
     if (index >= this.sites.length) return
     if (this._siteView === null) {
       this.createSiteView()
@@ -192,7 +211,7 @@ class MainWindow {
     this._siteView.webContents.once('dom-ready', () => {
       this.sendToRenderer('SITE_NAVIGATED', this.sites[index].indexPage)
       if (this._savedTraffic > 0) {
-        this.updateSavedSize(0)
+        this.updateSavedSize()
       }
     })
     this._siteView.webContents.loadURL(this.sites[index].indexPage)
@@ -253,7 +272,11 @@ class MainWindow {
     })
   }
 
-  updateSavedSize (size) {
+  /**
+   *
+   * @param size {number}
+   */
+  updateSavedSize (size = 0) {
     this._savedTraffic += size
     // should prevent 500 messages regarding saved traffic. not that important anyway
     if (this._savedTrafficTimeout) {
@@ -262,7 +285,7 @@ class MainWindow {
     this._savedTrafficTimeout = setTimeout(() => {
       this.sendToRenderer('INFO_UPDATE', { savedTraffic: this._savedTraffic })
       this._savedTrafficTimeout = null
-    }, 200)
+    }, 300)
   }
 }
 

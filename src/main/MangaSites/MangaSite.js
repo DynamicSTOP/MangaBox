@@ -41,7 +41,7 @@ export class MangaSite {
   }
 
   /**
-   * @param url
+   * @param url {string}
    * @returns {boolean}
    */
   isMangaURL (url = this._url) {
@@ -57,7 +57,7 @@ export class MangaSite {
   }
 
   /**
-   * @param url
+   * @param url {string}
    * @returns {boolean}
    */
   isMangaChapterURL (url = this._url) {
@@ -80,7 +80,7 @@ export class MangaSite {
 
   /**
    *
-   * @param view current _siteView
+   * @param view {Electron.BrowserView}
    * @returns {Promise<Object|false>}
    */
   async getMangaInfo (view) {
@@ -100,11 +100,11 @@ export class MangaSite {
 
   /**
    * if url belongs to current site
-   * @param url
+   * @param url {string}
    * @returns {boolean}
    */
   testURL (url) {
-    return url.match(this.pattern)
+    return !!url.match(this.pattern)
   }
 
   getNetworkWatcherRulesSet () {
@@ -118,10 +118,18 @@ export class MangaSite {
     return false
   }
 
+  /**
+   *
+   * @param request {Object}
+   */
   parseRequest (request = {}) {
     console.log('request in ' + this.name, request)
   }
 
+  /**
+   *
+   * @param response {Object}
+   */
   parseResponse (response = {}) {
     console.log('response in ' + this.name, response)
   }
@@ -129,7 +137,7 @@ export class MangaSite {
   /**
    *
    * @param url {string}
-   * @param view {BrowserView}
+   * @param view {Electron.BrowserView}
    * @returns {Promise<boolean>}
    */
   async updateStatus (url = '', view) {
@@ -144,7 +152,7 @@ export class MangaSite {
 
   /**
    *
-   * @param view
+   * @param view {Electron.BrowserView}
    * @returns {Promise<Object|false>}
    */
   async updateLastManga (view) {
@@ -158,7 +166,7 @@ export class MangaSite {
 
   /**
    *
-   * @param manga
+   * @param manga {Object}
    * @returns {Promise<void>}
    */
   async saveMangaImage (manga = {}) {

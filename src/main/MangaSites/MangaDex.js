@@ -22,6 +22,11 @@ class MangaDex extends MangaSite {
     return /https:\/\/mangadex\.org\/chapter\/(\d+)/.test(url)
   }
 
+  /**
+   *
+   * @param view {Electron.BrowserView}
+   * @returns {Promise<any>}
+   */
   async getMangaInfo (view) {
     return view.webContents.executeJavaScriptInIsolatedWorld(1, [{ code: this.mangaInfoJs }])
   }
@@ -33,10 +38,18 @@ class MangaDex extends MangaSite {
     }
   }
 
+  /**
+   *
+   * @param request {Object}
+   */
   parseRequest (request) {
     // console.log('request in ' + this.name, request.url)
   }
 
+  /**
+   *
+   * @param response {Object}
+   */
   parseResponse (response) {
     // console.log('response in ' + this.name, response.url, response.headers)
   }
