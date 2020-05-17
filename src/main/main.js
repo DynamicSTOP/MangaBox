@@ -1,17 +1,16 @@
 // Modules to control application life and create native browser window
-import MainWindow from './MainWindow'
+import App from './App'
 import { app, BrowserWindow, Tray, Menu } from 'electron'
 import path from 'path'
-import storage from './Storage'
 
 const basePath = process.env.NODE_ENV === 'production' ? path.resolve(__dirname) : path.resolve(__dirname, '..')
-const mainWindow = new MainWindow()
-mainWindow.setStorage(storage)
+const myApp = new App()
 let tray = null
 
 app.allowRendererProcessReuse = true
 
-app.on('ready', () => {
+app.on('ready', async () => {
+  await myApp.initStorage()
   tray = new Tray(path.resolve(basePath, 'images', 'ext_icon_inactive.png'))
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -22,7 +21,7 @@ app.on('ready', () => {
     {
       id: 4,
       label: 'Open app',
-      click: () => mainWindow.create()
+      click: () => myApp.show()
     },
     {
       id: 5,
@@ -32,8 +31,9 @@ app.on('ready', () => {
   ])
   tray.setToolTip('This is my application.')
   tray.setContextMenu(contextMenu)
-  mainWindow.create()
-  mainWindow.attachHandlers()
+  myApp.show()
+  myApp.attachHandlers()
+  myApp.checkNewChapters()
 })
 
 app.on('window-all-closed', function () {
@@ -45,5 +45,5 @@ app.on('window-all-closed', function () {
 app.on('activate', function () {
   // On macOS it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.
-  if (BrowserWindow.getAllWindows().length === 0) mainWindow.create()
+  if (BrowserWindow.getAllWindows().length === 0) myApp.show()
 })

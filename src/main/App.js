@@ -3,16 +3,22 @@ import path from 'path'
 import { networkWatcher } from './NetworkWatcher'
 import Google from './MangaSites/Google'
 import MangaDex from './MangaSites/MangaDex'
+import storage from './Storage'
 
 const enabledSites = [Google, MangaDex]
 
 const basePath = process.env.NODE_ENV === 'production' ? path.resolve(__dirname) : path.resolve(__dirname, '..')
 
-class MainWindow {
+class App {
   constructor () {
     this._window = null
     this._debug = process.env.NODE_ENV === 'development'
     this._siteView = null
+    /**
+     *
+     * @type {Storage|null}
+     * @private
+     */
     this._storage = null
     this._savedTraffic = 0
     this._currentSite = null
@@ -60,7 +66,7 @@ class MainWindow {
     this.attachMessenger()
   }
 
-  create () {
+  show () {
     if (this._window !== null) {
       this._window.focus()
       return
@@ -95,9 +101,9 @@ class MainWindow {
       ? 'http://localhost:9080'
       : `file://${__dirname}/index.html`
 
-    this._window.loadURL(winURL)
-    this._window.maximize()
     this._window.on('closed', this._resetParams.bind(this))
+    this._window.maximize()
+    this._window.loadURL(winURL)
   }
 
   attachHotkeys () {
@@ -189,12 +195,9 @@ class MainWindow {
     }
   }
 
-  /**
-   *
-   * @param storage {Storage}
-   */
-  setStorage (storage) {
+  async initStorage () {
     this._storage = storage
+    await this._storage.init()
     this.sites.map((site) => site.setStorage(storage))
     networkWatcher.setStorage(storage)
   }
@@ -287,6 +290,26 @@ class MainWindow {
       this._savedTrafficTimeout = null
     }, 300)
   }
+
+  async checkNewChapters () {
+    const allManga = await this._storage.getAllManga()
+    if (!allManga || allManga.length === 0) return
+    const timeout = 5 * 1000
+
+    // const hiddenWindow = new BrowserWindow({
+    //   width: 400,
+    //   height: 400,
+    //   show: false
+    // })
+
+    for (let i = 0; i < allManga.length; i++) {
+      const manga = allManga[i]
+      console.log('checking', manga.id, manga.url)
+      // await hiddenWindow.loadURL(manga.url)
+      await (new Promise((resolve) => setTimeout(resolve, timeout)))
+    }
+    return true
+  }
 }
 
-export default MainWindow
+export default App

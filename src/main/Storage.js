@@ -4,15 +4,23 @@ import path from 'path'
 
 const sqlite = sqlite3.verbose()
 const basePath = process.env.NODE_ENV === 'production' ? path.resolve('./') : path.resolve(__dirname, '..', '..')
+const dbPath = path.resolve(basePath, 'storage.sqlite')
+const backupPath = path.resolve(basePath, 'manga', 'backup.json')
 
 class Storage {
   constructor () {
-    const dbPath = path.resolve(basePath, 'storage.sqlite')
+    /**
+     *
+     * @type {sqlite3.Database|null}
+     */
     this.db = null
+  }
+
+  async init () {
     const initDB = !fs.existsSync(dbPath)
     this.db = new sqlite.Database(dbPath)
     if (initDB) {
-      this._initDB()
+      await this._initDB()
     }
     if (!fs.existsSync(path.resolve(basePath, 'cache'))) {
       fs.mkdirSync(path.resolve(basePath, 'cache'))
@@ -22,6 +30,27 @@ class Storage {
       fs.mkdirSync(path.resolve(basePath, 'manga'))
       fs.writeFileSync(path.resolve(basePath, 'manga', '.gitignore'), '*.*', 'utf8')
     }
+    await this._checkStorage()
+  }
+
+  async _checkStorage () {
+    const allManga = await this.getAllManga()
+
+    if (allManga.length === 0 && fs.existsSync(backupPath)) {
+      try {
+        const mangaArray = JSON.parse(fs.readFileSync(backupPath, 'utf8'))
+        for (let i = 0; i < mangaArray.length; i++) {
+          await this.addManga(mangaArray[i])
+        }
+      } catch (e) {
+        console.error(e)
+      }
+    }
+  }
+
+  async _dumpStorage () {
+    const allManga = await this.getAllManga()
+    fs.writeFileSync(backupPath, JSON.stringify(allManga), 'utf8')
   }
 
   _run (sql = '', params = []) {
@@ -60,6 +89,7 @@ class Storage {
         ' site_id INTEGER,' +
         ' manga_site_id INTEGER,' +
         ' url VARCHAR(255),' +
+        ' save BOOLEAN,' +
         ' title VARCHAR(255),' +
         ' last_check DATETIME,' +
         ' last_en DATETIME,' +
@@ -142,6 +172,7 @@ class Storage {
     const row = await this._get('SELECT * FROM manga WHERE ' + where.join(' and '), params)
     if (typeof row === 'undefined') return false
     try {
+      row.save = !!row.save
       row.json = JSON.parse(row.json)
     } catch (e) {
       return false
@@ -169,7 +200,27 @@ class Storage {
       })
 
     await this._run('INSERT INTO manga (' + values.join(',') + ') VALUES (' + Array(values.length).fill('?').join(',') + ')', params)
+    this._dumpStorage()
     return await this.getManga(manga)
+  }
+
+  /**
+   *
+   * @returns {Promise<Array.Object>}
+   */
+  getAllManga () {
+    return new Promise((resolve, reject) => {
+      this.db.all('SELECT * from manga', (error, rows) => {
+        if (error) {
+          return reject(error)
+        }
+        resolve(rows.map(r => {
+          r.save = !!r.save
+          r.json = JSON.parse(r.json)
+          return r
+        }))
+      })
+    })
   }
 }
 

@@ -184,7 +184,6 @@ export class MangaSite {
    * @returns {Promise<Object|false>}
    */
   async addManga () {
-    console.log(this._storage, this._lastManga)
     if (this._lastManga && this._storage) {
       const manga = await this._storage.addManga(this._lastManga)
       await this.saveMangaImage(manga)
