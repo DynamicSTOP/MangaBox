@@ -15,6 +15,8 @@ class Storage {
      * @type {sqlite3.Database|null}
      */
     this.db = null
+    this._dumping = false
+    setTimeout(() => this._dumpStorage(), 30 * 60 * 1000)
   }
 
   async init () {
@@ -63,10 +65,13 @@ class Storage {
   }
 
   async _dumpStorage () {
+    if (this._dumping) return
+    this._dumping = true
     const allManga = await this.getAllManga()
     fs.writeFileSync(backupPath, JSON.stringify(allManga), 'utf8')
     const allStoredPaths = await this.getAllStoredPaths()
     fs.writeFileSync(backupPathsPath, JSON.stringify(allStoredPaths), 'utf8')
+    this._dumping = false
   }
 
   _run (sql = '', params = []) {
@@ -107,10 +112,10 @@ class Storage {
         ' url VARCHAR(255),' +
         ' save BOOLEAN,' +
         ' title VARCHAR(255),' +
-        ' last_check DATETIME,' +
-        ' last_en DATETIME,' +
-        ' last_ru DATETIME,' +
-        ' last DATETIME,' +
+        ' last_check INTEGER,' +
+        ' last_en INTEGER,' +
+        ' last_ru INTEGER,' +
+        ' last INTEGER,' +
         ' json TEXT' +
         ')')
       await this._run('CREATE INDEX manga_id_index ON manga (site_id DESC, manga_site_id DESC)')
@@ -163,6 +168,11 @@ class Storage {
     return row
   }
 
+  async isPathExistsAndNotStored (url = '') {
+    const pathRow = await this.getFromPathsByUrl(url)
+    return !(!pathRow || pathRow.stored)
+  }
+
   async deleteFromPathsByUrl (url = '') {
     if (url === '') return false
     return await this._run('DELETE FROM paths WHERE url=?', [url])
@@ -196,28 +206,54 @@ class Storage {
     return row
   }
 
+  _buildMangaParams (manga) {
+    const allowedKeys = ['manga_site_id', 'title', 'site_id', 'url', 'json', 'last', 'last_en', 'last_ru', 'last_check']
+    const keys = []
+    const params = []
+    Object.keys(manga)
+      .filter((k) => allowedKeys.indexOf(k) !== -1)
+      .map((k) => {
+        keys.push(k)
+        switch (k) {
+          case 'json':
+            params.push(JSON.stringify(manga[k]))
+            break
+          default:
+            params.push(manga[k])
+            break
+        }
+      })
+    return {
+      keys,
+      params
+    }
+  }
+
   /**
    *
-   * @param manga
+   * @param manga {Object}
    * @returns {Promise<Object|false>}
    */
   async addManga (manga = {}) {
     const row = await this.getManga(manga)
     if (row) return row
-
-    const allowedKeys = ['manga_site_id', 'site_id', 'url', 'json', 'last', 'last_en', 'last_ru', 'last_check']
-    const values = []
-    const params = []
-    Object.keys(manga)
-      .filter((k) => allowedKeys.indexOf(k) !== -1)
-      .map((k) => {
-        values.push(k)
-        params.push(k === 'json' ? JSON.stringify(manga[k]) : manga[k])
-      })
-
-    await this._run('INSERT INTO manga (' + values.join(',') + ') VALUES (' + Array(values.length).fill('?').join(',') + ')', params)
+    const { keys, params } = this._buildMangaParams(manga)
+    await this._run('INSERT INTO manga (' + keys.join(',') + ') VALUES (' + Array(keys.length).fill('?').join(',') + ')', params)
     this._dumpStorage()
     return await this.getManga(manga)
+  }
+
+  /**
+   *
+   * @param manga {Object}
+   * @returns {Promise<Object|false>}
+   */
+  async updateManga (manga = {}) {
+    if (!manga.id) return
+    const { keys, params } = this._buildMangaParams(manga)
+    params.push(manga.id)
+    await this._run('UPDATE manga SET ' + keys.map((k) => `${k} = ?`).join(',') + ' WHERE id = ?', params)
+    return this.getManga({ id: manga.id })
   }
 
   /**

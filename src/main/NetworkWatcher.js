@@ -35,10 +35,20 @@ const checkRule = (rulesGroup, asRegexp = false, toLower) => {
 
 const baseDirPath = process.env.NODE_ENV === 'production' ? path.resolve('./') : path.resolve(__dirname, '..', '..')
 
-class NetworkWatcher extends EventEmitter {
+export class NetworkWatcher extends EventEmitter {
   constructor () {
     super()
-    this._view = null
+    /**
+     *
+     * @type {null|Electron.WebContents}
+     * @private
+     */
+    this._webContents = null
+    /**
+     *
+     * @type {null|Electron.Debugger}
+     * @private
+     */
     this._debugger = null
     this._cacheDirectory = path.resolve(baseDirPath, 'cache')
     this._debug = process.env.NODE_ENV === 'development'
@@ -47,22 +57,26 @@ class NetworkWatcher extends EventEmitter {
     this.loadCacheRules()
   }
 
-  attach (view) {
-    if (this._view) {
+  /**
+   *
+   * @param webContents {Electron.WebContents}
+   */
+  attach (webContents) {
+    if (this._webContents) {
       this._debugger.detach()
       this._debugger = null
-      this._view = null
+      this._webContents = null
     }
 
     try {
-      view.webContents.debugger.attach('1.3')
-      this._view = view
+      webContents.debugger.attach('1.3')
+      this._webContents = webContents
     } catch (err) {
       console.error('Debugger attach failed : ', err)
     }
 
-    if (this._view) {
-      this._debugger = this._view.webContents.debugger
+    if (this._webContents) {
+      this._debugger = this._webContents.debugger
       this._debugger.on('message', this.parseMessage.bind(this))
       this._debugger.sendCommand('Fetch.enable', { patterns: [{ requestStage: 'Request' }, { requestStage: 'Response' }] })
     }
@@ -497,8 +511,6 @@ class NetworkWatcher extends EventEmitter {
     })
   }
 }
-
-export const networkWatcher = new NetworkWatcher()
 
 export const getFileExtensionFromHeaders = (responseHeaders) => {
   const contentType = responseHeaders.find(h => h.name === 'content-type')

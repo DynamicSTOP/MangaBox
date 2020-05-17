@@ -1,39 +1,17 @@
 // Modules to control application life and create native browser window
 import App from './App'
-import { app, BrowserWindow, Tray, Menu } from 'electron'
-import path from 'path'
+import { app, BrowserWindow } from 'electron'
 
-const basePath = process.env.NODE_ENV === 'production' ? path.resolve(__dirname) : path.resolve(__dirname, '..')
 const myApp = new App()
-let tray = null
 
 app.allowRendererProcessReuse = true
 
 app.on('ready', async () => {
   await myApp.initStorage()
-  tray = new Tray(path.resolve(basePath, 'images', 'ext_icon_inactive.png'))
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      id: 2,
-      label: 'Force check'
-    },
-    { type: 'separator' },
-    {
-      id: 4,
-      label: 'Open app',
-      click: () => myApp.show()
-    },
-    {
-      id: 5,
-      label: 'Exit',
-      role: 'quit'
-    }
-  ])
-  tray.setToolTip('This is my application.')
-  tray.setContextMenu(contextMenu)
+  myApp.addTrayIcon()
   myApp.show()
   myApp.attachHandlers()
-  // myApp.checkNewChapters()
+  myApp.startChecks()
 })
 
 app.on('window-all-closed', function () {

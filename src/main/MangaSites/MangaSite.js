@@ -80,10 +80,10 @@ export class MangaSite {
 
   /**
    *
-   * @param view {Electron.BrowserView}
+   * @param webContents {Electron.WebContents}
    * @returns {Promise<Object|false>}
    */
-  async getMangaInfo (view) {
+  async getMangaInfo (webContents) {
     // false
     // or
     // {
@@ -137,13 +137,13 @@ export class MangaSite {
   /**
    *
    * @param url {string}
-   * @param view {Electron.BrowserView}
+   * @param webContents {Electron.WebContents}
    * @returns {Promise<boolean>}
    */
-  async updateStatus (url = '', view) {
+  async updateStatus (url = '', webContents) {
     this._url = url
     if (this.isMangaURL(this._url)) {
-      await this.updateLastManga(view)
+      await this.updateLastManga(webContents)
     } else {
       this._lastManga = false
     }
@@ -152,12 +152,12 @@ export class MangaSite {
 
   /**
    *
-   * @param view {Electron.BrowserView}
+   * @param webContents {Electron.WebContents}
    * @returns {Promise<Object|false>}
    */
-  async updateLastManga (view) {
+  async updateLastManga (webContents) {
     try {
-      this._lastManga = await this.getMangaInfo(view)
+      this._lastManga = await this.getMangaInfo(webContents)
     } catch (e) {
       this._lastManga = false
     }
@@ -169,7 +169,7 @@ export class MangaSite {
    * @param manga {Object}
    * @returns {Promise<void>}
    */
-  async saveMangaImage (manga = {}) {
+  async saveMangaTitleImage (manga = {}) {
     if (manga.json && manga.json.image) {
       const row = await this._storage.getFromPathsByUrl(manga.json.image)
       if (row && row.stored === false) {
@@ -186,7 +186,7 @@ export class MangaSite {
   async addManga () {
     if (this._lastManga && this._storage) {
       const manga = await this._storage.addManga(this._lastManga)
-      await this.saveMangaImage(manga)
+      await this.saveMangaTitleImage(manga)
       return manga
     }
     return false

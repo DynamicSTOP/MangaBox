@@ -1,13 +1,13 @@
-import { ipcMain, globalShortcut, BrowserWindow, BrowserView, screen, session } from 'electron'
+import { ipcMain, globalShortcut, BrowserWindow, BrowserView, screen, session, Tray, Menu } from 'electron'
 import path from 'path'
-import { networkWatcher } from './NetworkWatcher'
+import { NetworkWatcher } from './NetworkWatcher'
 import Google from './MangaSites/Google'
 import MangaDex from './MangaSites/MangaDex'
 import storage from './Storage'
 
 const enabledSites = [Google, MangaDex]
-
 const basePath = process.env.NODE_ENV === 'production' ? path.resolve(__dirname) : path.resolve(__dirname, '..')
+const mainNetworkWatcher = new NetworkWatcher()
 
 class App {
   constructor () {
@@ -24,10 +24,39 @@ class App {
     this._currentSite = null
     this._lastManga = null
     this.__savedTrafficTimeout = null
+    /**
+     *
+     * @type {null|Electron.Tray}
+     * @private
+     */
+    this._tray = null
     this.sites = []
 
-    networkWatcher.on('loadedFromCache', this.updateSavedSize.bind(this))
+    mainNetworkWatcher.on('loadedFromCache', this.updateSavedSize.bind(this))
     this.addSites()
+  }
+
+  addTrayIcon () {
+    this._tray = new Tray(path.resolve(basePath, 'images', 'ext_icon_inactive.png'))
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        id: 2,
+        label: 'Force check'
+      },
+      { type: 'separator' },
+      {
+        id: 4,
+        label: 'Open app',
+        click: () => this.show()
+      },
+      {
+        id: 5,
+        label: 'Exit',
+        role: 'quit'
+      }
+    ])
+    this._tray.setToolTip('MangaBox')
+    this._tray.setContextMenu(contextMenu)
   }
 
   _resetParams () {
@@ -43,16 +72,16 @@ class App {
       const rules = site.getNetworkWatcherRulesSet()
       if (!rules) return
       rules.marker = site.id
-      networkWatcher.addWatcherRules(rules)
+      mainNetworkWatcher.addWatcherRules(rules)
     })
-    networkWatcher.on('Request', (request) => {
+    mainNetworkWatcher.on('Request', (request) => {
       this.sites.map((site) => {
         if (site.id === request.marker) {
           site.parseRequest(request)
         }
       })
     })
-    networkWatcher.on('Response', (response) => {
+    mainNetworkWatcher.on('Response', (response) => {
       this.sites.map((site) => {
         if (site.id === response.marker) {
           site.parseResponse(response)
@@ -199,7 +228,7 @@ class App {
     this._storage = storage
     await this._storage.init()
     this.sites.map((site) => site.setStorage(storage))
-    networkWatcher.setStorage(storage)
+    mainNetworkWatcher.setStorage(storage)
   }
 
   /**
@@ -236,7 +265,7 @@ class App {
         webviewTag: false
       }
     })
-    networkWatcher.attach(this._siteView)
+    mainNetworkWatcher.attach(this._siteView.webContents)
     this._window.addBrowserView(this._siteView)
     this._siteView.setBounds({
       x: 0,
@@ -257,7 +286,7 @@ class App {
 
         this._currentSite = this.sites.find((site) => site.testURL(url))
         if (this._currentSite) {
-          await this._currentSite.updateStatus(url, this._siteView)
+          await this._currentSite.updateStatus(url, this._siteView.webContents)
 
           this.sendToRenderer('CONTROLS_UPDATE', {
             isManga: this._currentSite.isMangaURL(),
@@ -291,23 +320,81 @@ class App {
     }, 300)
   }
 
-  async checkNewChapters () {
+  async startChecks () {
+    const interval = 30 * 60 * 1000
+    const intl = new Intl.DateTimeFormat('en', {
+      hourCycle: 'h23',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    })
+    const check = async () => {
+      await this.checkNewChapters()
+      const ts = new Date(new Date().getTime() + interval)
+      console.log(ts.toString())
+      this._tray.setToolTip(`MangaBox - next check at ${intl.format(ts)}`)
+    }
+
+    await check()
+    setInterval(check, interval)
+  }
+
+  /**
+   *
+   * @param force will ignore time margin
+   * @returns {Promise<boolean>}
+   */
+  async checkNewChapters (force = false) {
     if (this._checkingChapters) return
     const allManga = await this._storage.getAllManga()
     if (!allManga || allManga.length === 0) return
     this._checkingChapters = true
     const timeout = 5 * 1000
+    const minTimeMargin = Math.floor(2.8 * 60 * 60 * 1000)
+    const currentTime = new Date().getTime()
 
-    // const hiddenWindow = new BrowserWindow({
-    //   width: 400,
-    //   height: 400,
-    //   show: false
-    // })
+    const ses = session.fromPartition('persist:site')
+    const hiddenWindow = new BrowserWindow({
+      width: 400,
+      height: 400,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        nodeIntegrationInWorker: false,
+        contextIsolation: true,
+        enableRemoteModule: true,
+        session: ses,
+        webviewTag: false
+      }
+    })
+
+    if (this._storage) {
+      const tempWatcher = new NetworkWatcher()
+      tempWatcher.on('loadedFromCache', this.updateSavedSize.bind(this))
+      tempWatcher.setStorage(this._storage)
+      tempWatcher.attach(hiddenWindow.webContents)
+    }
 
     for (let i = 0; i < allManga.length; i++) {
       const manga = allManga[i]
-      console.log('checking', manga.id, manga.url)
-      // await hiddenWindow.loadURL(manga.url)
+      this._tray.setToolTip(`MangaBox\nChecking ${i + 1}/${allManga.length}\n${manga.title}`)
+      if (!force && currentTime - manga.last_check < minTimeMargin) continue
+      const site = this.sites.find((site) => site.id === manga.site_id)
+      if (!site) continue
+      await hiddenWindow.loadURL(manga.url)
+      const info = await site.getMangaInfo(hiddenWindow.webContents)
+      const newImage = info.json.image
+      info.id = manga.id
+      if (newImage) {
+        const imageChanged = newImage !== manga.json.image
+        const shouldMove = imageChanged || await this._storage.isPathExistsAndNotStored(newImage)
+        if (shouldMove) {
+          await site.saveMangaTitleImage(info)
+        }
+      }
+      Object.assign(info.json, manga.json, { image: newImage || manga.json.image })
+      await this._storage.updateManga(info)
+      // TODO new chapters notifications
       await (new Promise((resolve) => setTimeout(resolve, timeout)))
     }
     this._checkingChapters = false

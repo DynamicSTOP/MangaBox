@@ -24,11 +24,11 @@ class MangaDex extends MangaSite {
 
   /**
    *
-   * @param view {Electron.BrowserView}
+   * @param webContents {Electron.WebContents}
    * @returns {Promise<any>}
    */
-  async getMangaInfo (view) {
-    return view.webContents.executeJavaScriptInIsolatedWorld(1, [{ code: this.mangaInfoJs }])
+  async getMangaInfo (webContents) {
+    return webContents.executeJavaScriptInIsolatedWorld(1, [{ code: this.mangaInfoJs }])
   }
 
   getNetworkWatcherRulesSet () {
