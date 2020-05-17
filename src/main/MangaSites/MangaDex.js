@@ -28,7 +28,8 @@ class MangaDex extends MangaSite {
 
   getNetworkWatcherRulesSet () {
     return {
-      response: [/\/api\//, /\.json/]
+      response: true,
+      headers: ['referer']
     }
   }
 
@@ -37,7 +38,7 @@ class MangaDex extends MangaSite {
   }
 
   parseResponse (response) {
-    console.log('response in ' + this.name, response.url)
+    console.log('response in ' + this.name, response.url, response.headers)
   }
 }
 

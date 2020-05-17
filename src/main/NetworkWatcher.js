@@ -36,8 +36,8 @@ const checkRule = (rulesGroup, asRegexp = false, toLower) => {
 const baseDirPath = process.env.NODE_ENV === 'production' ? path.resolve('./') : path.resolve(__dirname, '..', '..')
 
 class NetworkWatcher extends EventEmitter {
-  constructor (props) {
-    super(props)
+  constructor () {
+    super()
     this._view = null
     this._debugger = null
     this._cacheDirectory = path.resolve(baseDirPath, 'cache')
@@ -266,7 +266,7 @@ class NetworkWatcher extends EventEmitter {
         return {
           ...info,
           body,
-          headers: filteredHeaders,
+          responseHeaders: filteredHeaders,
           redownloaded: validation && validation.statusCode === 200
         }
       } catch (e) {
@@ -405,10 +405,10 @@ class NetworkWatcher extends EventEmitter {
               await this._debugger.sendCommand('Fetch.fulfillRequest', {
                 requestId,
                 responseCode: 200,
-                responseHeaders: cached.headers,
+                responseHeaders: cached.responseHeaders,
                 body: cached.body
               })
-              await this.emitResponse(method, url, headers, responseHeaders, requestId, postData, {
+              await this.emitResponse(method, url, headers, cached.responseHeaders, requestId, postData, {
                 base64Encoded: true,
                 body: cached.body
               })
