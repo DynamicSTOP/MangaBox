@@ -6,6 +6,7 @@ const sqlite = sqlite3.verbose()
 const basePath = process.env.NODE_ENV === 'production' ? path.resolve('./') : path.resolve(__dirname, '..', '..')
 const dbPath = path.resolve(basePath, 'storage.sqlite')
 const backupPath = path.resolve(basePath, 'manga', 'backup.json')
+const backupPathsPath = path.resolve(basePath, 'manga', 'backup_paths.json')
 
 class Storage {
   constructor () {
@@ -45,12 +46,27 @@ class Storage {
       } catch (e) {
         console.error(e)
       }
+
+      const storedPaths = await this.getAllStoredPaths()
+      if (storedPaths.length === 0 && fs.existsSync(backupPathsPath)) {
+        try {
+          const paths = JSON.parse(fs.readFileSync(backupPathsPath, 'utf8'))
+          for (let i = 0; i < paths.length; i++) {
+            const { url, path, info, stored } = paths[i]
+            await this.addToPaths(url, path, info, stored)
+          }
+        } catch (e) {
+          console.error(e)
+        }
+      }
     }
   }
 
   async _dumpStorage () {
     const allManga = await this.getAllManga()
     fs.writeFileSync(backupPath, JSON.stringify(allManga), 'utf8')
+    const allStoredPaths = await this.getAllStoredPaths()
+    fs.writeFileSync(backupPathsPath, JSON.stringify(allStoredPaths), 'utf8')
   }
 
   _run (sql = '', params = []) {
@@ -217,6 +233,25 @@ class Storage {
         resolve(rows.map(r => {
           r.save = !!r.save
           r.json = JSON.parse(r.json)
+          return r
+        }))
+      })
+    })
+  }
+
+  /**
+   *
+   * @returns {Promise<Array.Object>}
+   */
+  getAllStoredPaths () {
+    return new Promise((resolve, reject) => {
+      this.db.all('SELECT * from paths where stored = ?', [true], (error, rows) => {
+        if (error) {
+          return reject(error)
+        }
+        resolve(rows.map(r => {
+          r.stored = !!r.stored
+          r.info = JSON.parse(r.info)
           return r
         }))
       })

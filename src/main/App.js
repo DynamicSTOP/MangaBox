@@ -292,8 +292,10 @@ class App {
   }
 
   async checkNewChapters () {
+    if (this._checkingChapters) return
     const allManga = await this._storage.getAllManga()
     if (!allManga || allManga.length === 0) return
+    this._checkingChapters = true
     const timeout = 5 * 1000
 
     // const hiddenWindow = new BrowserWindow({
@@ -308,6 +310,7 @@ class App {
       // await hiddenWindow.loadURL(manga.url)
       await (new Promise((resolve) => setTimeout(resolve, timeout)))
     }
+    this._checkingChapters = false
     return true
   }
 }

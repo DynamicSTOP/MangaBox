@@ -33,7 +33,7 @@ app.on('ready', async () => {
   tray.setContextMenu(contextMenu)
   myApp.show()
   myApp.attachHandlers()
-  myApp.checkNewChapters()
+  // myApp.checkNewChapters()
 })
 
 app.on('window-all-closed', function () {
