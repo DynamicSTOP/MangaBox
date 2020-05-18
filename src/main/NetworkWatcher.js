@@ -228,26 +228,25 @@ export class NetworkWatcher extends EventEmitter {
           if (!validation.result) {
             return false
           } else {
+            if (validation.statusCode !== 200 && validation.statusCode !== 304) {
+              return false
+            }
+            info = {
+              url,
+              headers,
+              responseHeaders: validation.responseHeaders.filter(h => ['set-cookie', 'authorization', 'age'].indexOf(h.name) === -1),
+              base64Encoded: true
+            }
+            const expireDate = this.getExpiredFromHeaders(info.responseHeaders)
+            const cacheControl = this.getCacheControlFromHeaders(info.responseHeaders)
+            const cacheControlInfo = this.getCacheControlInfo(cacheControl, expireDate)
+            Object.assign(info, cacheControlInfo)
+            info.date = new Date().getTime()
+            info.responseHeaders = validation.responseHeaders.filter(h => ['set-cookie', 'authorization', 'age'].indexOf(h.name) === -1)
+            await this._storage.addToPaths(url, path.relative(baseDirPath, cachedPath), info, stored)
             if (validation.statusCode === 200) {
               fs.writeFileSync(cachedPath, validation.body, 'base64')
               body = validation.body
-              info = {
-                url,
-                headers,
-                responseHeaders: validation.responseHeaders.filter(h => ['set-cookie', 'authorization', 'age'].indexOf(h.name) === -1),
-                base64Encoded: true
-              }
-            }
-            if (validation.statusCode === 200 || validation.statusCode === 304) {
-              const expireDate = this.getExpiredFromHeaders(info.responseHeaders)
-              const cacheControl = this.getCacheControlFromHeaders(info.responseHeaders)
-              const cacheControlInfo = this.getCacheControlInfo(cacheControl, expireDate)
-              Object.assign(info, cacheControlInfo)
-              info.date = new Date().getTime()
-              info.responseHeaders = validation.responseHeaders.filter(h => ['set-cookie', 'authorization', 'age'].indexOf(h.name) === -1)
-              await this._storage.addToPaths(url, path.relative(baseDirPath, cachedPath), info, stored)
-            } else {
-              return false
             }
           }
         }
@@ -354,16 +353,6 @@ export class NetworkWatcher extends EventEmitter {
     if (this._storage === false) return false
 
     if (this.shouldCache(method, url, responseHeaders)) {
-      // TODO check if need to check db
-      const row = await this._storage.getFromPathsByUrl(url)
-      let cachedPath
-      let stored = false
-      if (row !== false) {
-        cachedPath = path.resolve(baseDirPath, row.path)
-        stored = row.stored
-      } else {
-        cachedPath = this._storage.resolveCachePath(url)
-      }
       const info = {
         url,
         headers,
@@ -381,8 +370,7 @@ export class NetworkWatcher extends EventEmitter {
       try {
         const result = await this._debugger.sendCommand('Fetch.getResponseBody', { requestId })
         info.base64Encoded = result.base64Encoded
-        await this._storage.addToPaths(url, path.relative(baseDirPath, cachedPath), info, stored)
-        fs.writeFileSync(path.resolve(baseDirPath, cachedPath), result.body, result.base64Encoded ? 'base64' : 'utf8')
+        await this._storage.storePath(url, info, result.body)
       } catch (e) {
         console.error(e)
       }

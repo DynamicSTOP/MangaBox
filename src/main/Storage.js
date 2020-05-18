@@ -1,11 +1,6 @@
 import sqlite3 from 'sqlite3'
 import fs from 'fs'
 import path from 'path'
-import crypto from 'crypto'
-
-const getSHA = (data) => {
-  return crypto.createHash('sha256').update(data).digest('hex')
-}
 
 const sqlite = sqlite3.verbose()
 const basePath = process.env.NODE_ENV === 'production' ? path.resolve('./') : path.resolve(__dirname, '..', '..')
@@ -21,8 +16,8 @@ class Storage {
      */
     this.db = null
     this._dumping = false
-    this._cacheDirectory = path.resolve(basePath, 'cache')
     setTimeout(() => this._dumpStorage(), 30 * 60 * 1000)
+    this._id = 0
   }
 
   async init () {
@@ -40,10 +35,6 @@ class Storage {
       fs.writeFileSync(path.resolve(basePath, 'manga', '.gitignore'), '*.*', 'utf8')
     }
     await this._checkStorage()
-  }
-
-  resolveCachePath (url = '') {
-    return path.resolve(this._cacheDirectory, getSHA(url))
   }
 
   async _checkStorage () {
@@ -109,7 +100,15 @@ class Storage {
   async _initDB () {
     try {
       // paths
-      await this._run('CREATE TABLE paths (url VARCHAR(255) PRIMARY KEY, path VARCHAR(255), info TEXT, stored BOOLEAN, time DATETIME default CURRENT_TIMESTAMP)')
+      await this._run('CREATE TABLE paths ' +
+        ' (' +
+        ' id INTEGER PRIMARY KEY AUTOINCREMENT,' +
+        ' url VARCHAR(255) UNIQUE,' +
+        ' path VARCHAR(255),' +
+        ' info TEXT,' +
+        ' stored BOOLEAN,' +
+        ' time DATETIME default CURRENT_TIMESTAMP' +
+        ')')
       await this._run('CREATE INDEX paths_path_index ON paths (stored, path)')
 
       // manga data
@@ -148,9 +147,35 @@ class Storage {
   }
 
   async addToPaths (url = '', path = '', info = {}, stored = false) {
-    return await this._run(
-      'INSERT OR REPLACE INTO paths (url, path, info, stored) VALUES (?,?,?,?)',
-      [url, path, JSON.stringify(info), stored])
+    try {
+      await this._run(
+        'INSERT OR REPLACE INTO paths (id, url, path, info, stored) ' +
+        'VALUES ((select id from paths where url = ?),?,?,?,?)',
+        [url, url, path, JSON.stringify(info), stored])
+      return await this.getFromPathsByUrl(url)
+    } catch (e) {
+      console.error(e)
+    }
+    return false
+  }
+
+  async storePath (url = '', info = {}, body) {
+    try {
+      const rowStored = await this.getFromPathsByUrl(url)
+      if (rowStored) {
+        await this.addToPaths(url, rowStored.path, info, rowStored.stored)
+        fs.writeFileSync(path.resolve(basePath, rowStored.path), body, info.base64Encoded ? 'base64' : 'utf8')
+      } else {
+        const row = await this.addToPaths(url, '', info, false)
+        const storedPath = path.relative(basePath, path.resolve(basePath, 'cache', row.id.toString()))
+        await this.addToPaths(url, storedPath, info, false)
+        fs.writeFileSync(path.resolve(basePath, storedPath), body, info.base64Encoded ? 'base64' : 'utf8')
+      }
+      return true
+    } catch (e) {
+      console.error(e)
+    }
+    return false
   }
 
   async getFromPathsByUrl (url = '') {
