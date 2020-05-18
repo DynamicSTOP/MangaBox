@@ -9,7 +9,7 @@ export default {
 </script>
 
 <template>
-  <div class="MangaList">
+  <div class="mangaList flex-row">
     <div v-if="allManga.length === 0">
       Nothing tracked
     </div>
@@ -20,6 +20,8 @@ export default {
       <img
         v-if="manga.json.image"
         :src="manga.json.image"
+        class="title"
+        :class="{old: !manga.json.newChapters || manga.json.newChapters.length===0}"
       >
     </div>
   </div>

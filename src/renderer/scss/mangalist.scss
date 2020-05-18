@@ -1,0 +1,14 @@
+.mangaList {
+  padding:5px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+
+  img.title {
+    max-width: 150px;
+
+    &.old{
+      filter: grayscale(1);
+    }
+  }
+
+}
