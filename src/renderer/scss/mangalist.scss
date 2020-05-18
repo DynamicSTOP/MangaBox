@@ -3,15 +3,21 @@
   justify-content: space-between;
 
   .manga {
-    max-height:214px;
+    max-height:213px;
     max-width:150px;
     overflow: hidden;
     margin:10px;
 
+    transition: 0.3s;
+    box-shadow: 2px 2px 5px #000;
+    &:hover {
+      box-shadow: 0 0 5px #000;
+    }
+
     img.title {
       max-width: 150px;
-      transition: 0.3s;
       cursor: pointer;
+      transition: 0.3s;
 
       &.old {
         filter: grayscale(1);
