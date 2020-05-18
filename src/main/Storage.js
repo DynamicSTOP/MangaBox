@@ -1,6 +1,11 @@
 import sqlite3 from 'sqlite3'
 import fs from 'fs'
 import path from 'path'
+import crypto from 'crypto'
+
+const getSHA = (data) => {
+  return crypto.createHash('sha256').update(data).digest('hex')
+}
 
 const sqlite = sqlite3.verbose()
 const basePath = process.env.NODE_ENV === 'production' ? path.resolve('./') : path.resolve(__dirname, '..', '..')
@@ -16,6 +21,7 @@ class Storage {
      */
     this.db = null
     this._dumping = false
+    this._cacheDirectory = path.resolve(basePath, 'cache')
     setTimeout(() => this._dumpStorage(), 30 * 60 * 1000)
   }
 
@@ -34,6 +40,10 @@ class Storage {
       fs.writeFileSync(path.resolve(basePath, 'manga', '.gitignore'), '*.*', 'utf8')
     }
     await this._checkStorage()
+  }
+
+  resolveCachePath (url = '') {
+    return path.resolve(this._cacheDirectory, getSHA(url))
   }
 
   async _checkStorage () {

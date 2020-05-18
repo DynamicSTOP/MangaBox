@@ -2,12 +2,8 @@
 import EventEmitter from 'events'
 import path from 'path'
 import fs from 'fs'
-import crypto from 'crypto'
 import https from 'https'
 
-const getSHA = (data) => {
-  return crypto.createHash('sha256').update(data).digest('hex')
-}
 const checkRule = (rulesGroup, asRegexp = false, toLower) => {
   if (typeof rulesGroup === 'undefined') return false
   if (rulesGroup instanceof Array) {
@@ -50,7 +46,6 @@ export class NetworkWatcher extends EventEmitter {
      * @private
      */
     this._debugger = null
-    this._cacheDirectory = path.resolve(baseDirPath, 'cache')
     this._debug = process.env.NODE_ENV === 'development'
     this._storage = false
     this.watcherRulesSets = []
@@ -367,7 +362,7 @@ export class NetworkWatcher extends EventEmitter {
         cachedPath = path.resolve(baseDirPath, row.path)
         stored = row.stored
       } else {
-        cachedPath = path.resolve(this._cacheDirectory, getSHA(url))
+        cachedPath = this._storage.resolveCachePath(url)
       }
       const info = {
         url,
