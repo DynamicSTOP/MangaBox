@@ -1,12 +1,15 @@
 <script>
 import MangaList from '@/components/MangaList'
 import TopBar from '@/components/TopBar'
-
+import { mapGetters } from 'vuex'
 export default {
   name: 'Home',
   components: {
     TopBar,
     MangaList
+  },
+  computed: {
+    ...mapGetters(['isSiteViewOpen'])
   }
 }
 </script>
@@ -14,6 +17,8 @@ export default {
 <template>
   <div>
     <top-bar />
-    <manga-list />
+    <div v-show="!isSiteViewOpen">
+      <manga-list />
+    </div>
   </div>
 </template>

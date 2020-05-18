@@ -24,6 +24,9 @@ const store = new Vuex.Store({
     },
     isChapter (state) {
       return state.currentURL !== null && state.isChapter
+    },
+    isSiteViewOpen (state) {
+      return state.currentURL !== null
     }
   },
   mutations: {
@@ -37,8 +40,9 @@ const store = new Vuex.Store({
       store.sites = newConfig.sites
       store.allManga = newConfig.allManga
     },
-    SITE_NAVIGATED (store) {
+    SITE_NAVIGATED (store, url) {
       store.isNavigating = false
+      store.currentURL = url
     },
     INFO_UPDATE (store, newInfo) {
       const { savedTraffic } = newInfo
