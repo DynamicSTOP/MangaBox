@@ -1,7 +1,9 @@
 <script>
+import Manga from '@/components/MangaList/Manga'
 import { mapState } from 'vuex'
 export default {
   name: 'MangaList',
+  components: { Manga },
   computed: {
     ...mapState(['allManga'])
   }
@@ -13,16 +15,10 @@ export default {
     <div v-if="allManga.length === 0">
       Nothing tracked
     </div>
-    <div
+    <manga
       v-for="manga in allManga"
       :key="'manga_'+manga.id"
-    >
-      <img
-        v-if="manga.json.image"
-        :src="manga.json.image"
-        class="title"
-        :class="{old: !manga.json.newChapters || manga.json.newChapters.length===0}"
-      >
-    </div>
+      :manga="manga"
+    />
   </div>
 </template>

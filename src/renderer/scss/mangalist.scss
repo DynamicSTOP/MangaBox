@@ -1,14 +1,25 @@
 .mangaList {
-  padding:5px;
   flex-wrap: wrap;
   justify-content: space-between;
 
-  img.title {
-    max-width: 150px;
+  .manga {
+    max-height:214px;
+    max-width:150px;
+    overflow: hidden;
+    margin:10px;
 
-    &.old{
-      filter: grayscale(1);
+    img.title {
+      max-width: 150px;
+      transition: 0.3s;
+      cursor: pointer;
+
+      &.old {
+        filter: grayscale(1);
+      }
+
+      &:hover {
+        filter: none;
+      }
     }
   }
-
 }
