@@ -215,6 +215,22 @@ class App {
           this.sendToRenderer('MANGA_ADDED', manga)
         }
         break
+      case 'MANGA_OPEN':
+        if (data.id) {
+          const manga = await this._storage.getManga(data)
+          this.openSiteView()
+          await this._siteView.webContents.loadURL(manga.url)
+        }
+        break
+      case 'MANGA_SET_VIEWED':
+        if (data.id) {
+          const manga = await this._storage.getManga(data)
+          if (!manga) break
+          manga.json.newChapters = []
+          await this._storage.updateManga(manga)
+          this.sendToRenderer('MANGA_UPDATED', manga)
+        }
+        break
       default:
         if (this._debug) {
           console.log('message from renderer', type, data)
@@ -288,16 +304,20 @@ class App {
    */
   siteNavigate (index = 0) {
     if (index >= this.sites.length) return
+    this.openSiteView()
+    this._siteView.webContents.loadURL(this.sites[index].indexPage)
+  }
+
+  openSiteView () {
     if (this._siteView === null) {
       this.createSiteView()
     }
     this._siteView.webContents.once('dom-ready', () => {
-      this.sendToRenderer('SITE_NAVIGATED', this.sites[index].indexPage)
+      this.sendToRenderer('SITE_NAVIGATED', this._siteView.webContents.getURL())
       if (this._savedTraffic > 0) {
         this.updateSavedSize()
       }
     })
-    this._siteView.webContents.loadURL(this.sites[index].indexPage)
   }
 
   createSiteView () {
@@ -481,6 +501,7 @@ class App {
         }
       })
       await this._storage.updateManga(manga)
+      this.sendToRenderer('MANGA_UPDATED', manga)
       await (new Promise((resolve) => setTimeout(resolve, timeout)))
     }
     this._checkingChapters = false

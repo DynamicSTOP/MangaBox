@@ -7,6 +7,11 @@ const express = require('express')
 const { spawn } = require('child_process')
 const webpack = require('webpack')
 const WebpackDevServer = require('webpack-dev-server')
+const crypto = require('crypto')
+
+const getSHA = (data) => {
+  return crypto.createHash('sha256').update(data).digest('hex')
+}
 
 const mainConfig = require('./webpack.main.config')
 const rendererConfig = require('./webpack.renderer.config')
@@ -179,14 +184,19 @@ app.get('/loadLocal/*', (req, res) => {
   const filePath = Buffer.from(req.url.replace('/loadLocal/', ''), 'base64').toString()
   if (filePath.match(/\.jpg$/)) {
     res.setHeader('content-type', 'image/jpeg')
-  } else if (filePath.match(/\.jpg$/)) {
+  } else if (filePath.match(/\.png$/)) {
     res.setHeader('content-type', 'image/png')
+  } else {
+    res.status(404)
+    res.write('not found')
+    return
   }
   const absFilePath = path.resolve(__dirname, '..', filePath)
   const body = fs.readFileSync(absFilePath, 'base64')
   const buf = Buffer.from(body, 'base64')
   res.setHeader('content-length', buf.length)
-  res.setHeader('cache-control', 'no-store,max-age=0')
+  res.setHeader('cache-control', 'max-age=3600')
+  res.setHeader('etag', getSHA(buf))
   res.write(buf)
   res.end()
 })

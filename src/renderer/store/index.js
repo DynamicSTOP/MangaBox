@@ -62,6 +62,11 @@ const store = new Vuex.Store({
     MANGA_ADDED (store, manga) {
       store.isAddingManga = false
       store.isMangaStored = true
+    },
+    MANGA_UPDATED (store, manga) {
+      const index = store.allManga.findIndex((s) => s.id === manga.id)
+      if (index === -1) return console.error('manga not in store!')
+      store.allManga.splice(index, 1, manga)
     }
   },
   actions: {
@@ -85,6 +90,15 @@ const store = new Vuex.Store({
     },
     MANGA_ADDED (context, manga) {
       context.commit('MANGA_ADDED', manga)
+    },
+    MANGA_OPEN (context, manga) {
+      sendMessageToMain('MANGA_OPEN', manga)
+    },
+    MANGA_SET_VIEWED (context, manga) {
+      sendMessageToMain('MANGA_SET_VIEWED', manga)
+    },
+    MANGA_UPDATED (context, manga) {
+      context.commit('MANGA_UPDATED', manga)
     }
   }
 })
