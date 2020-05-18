@@ -207,7 +207,7 @@ class Storage {
   }
 
   _buildMangaParams (manga) {
-    const allowedKeys = ['manga_site_id', 'title', 'site_id', 'url', 'json', 'last', 'last_en', 'last_ru', 'last_check']
+    const allowedKeys = ['manga_site_id', 'title', 'site_id', 'url', 'save', 'json', 'last', 'last_en', 'last_ru', 'last_check']
     const keys = []
     const params = []
     Object.keys(manga)

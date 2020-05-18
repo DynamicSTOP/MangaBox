@@ -1,4 +1,14 @@
-import { ipcMain, globalShortcut, BrowserWindow, BrowserView, screen, session, Tray, Menu } from 'electron'
+import {
+  ipcMain,
+  globalShortcut,
+  BrowserWindow,
+  BrowserView,
+  screen,
+  session,
+  Tray,
+  Menu,
+  Notification
+} from 'electron'
 import path from 'path'
 import { NetworkWatcher } from './NetworkWatcher'
 import Google from './MangaSites/Google'
@@ -8,6 +18,22 @@ import storage from './Storage'
 const enabledSites = [Google, MangaDex]
 const basePath = process.env.NODE_ENV === 'production' ? path.resolve(__dirname) : path.resolve(__dirname, '..')
 const mainNetworkWatcher = new NetworkWatcher()
+
+const deepObjectMerge = (target, ...sources) => {
+  if (target === null || typeof target !== 'object') return
+
+  sources.filter((source) => source !== null && typeof source === 'object')
+    .map((source) => {
+      Object.keys(source).map((key) => {
+        // thanks javascript for typeof null === "object"
+        if (target[key] !== null && source[key] !== null && typeof target[key] === 'object' && typeof source[key] === 'object') {
+          deepObjectMerge(target[key], source[key])
+        } else {
+          target[key] = source[key]
+        }
+      })
+    })
+}
 
 class App {
   constructor () {
@@ -331,7 +357,6 @@ class App {
     const check = async () => {
       await this.checkNewChapters()
       const ts = new Date(new Date().getTime() + interval)
-      console.log(ts.toString())
       this._tray.setToolTip(`MangaBox - next check at ${intl.format(ts)}`)
     }
 
@@ -378,11 +403,13 @@ class App {
     for (let i = 0; i < allManga.length; i++) {
       const manga = allManga[i]
       this._tray.setToolTip(`MangaBox\nChecking ${i + 1}/${allManga.length}\n${manga.title}`)
-      if (!force && currentTime - manga.last_check < minTimeMargin) continue
+      if (!force && (currentTime - manga.last_check < minTimeMargin)) continue
       const site = this.sites.find((site) => site.id === manga.site_id)
       if (!site) continue
       await hiddenWindow.loadURL(manga.url)
+      let newChapters = manga.json.newChapters || []
       const info = await site.getMangaInfo(hiddenWindow.webContents)
+      // update json.image
       const newImage = info.json.image
       info.id = manga.id
       if (newImage) {
@@ -392,9 +419,43 @@ class App {
           await site.saveMangaTitleImage(info)
         }
       }
-      Object.assign(info.json, manga.json, { image: newImage || manga.json.image })
-      await this._storage.updateManga(info)
-      // TODO new chapters notifications
+
+      // update json.newChapters
+      // TODO remake into something more nice with multiple lang support, though would need to change db schema
+      const alertChapters = []
+      if (info.last_ru && manga.last_ru !== info.last_ru && newChapters.indexOf('ru') === -1) {
+        alertChapters.push('ru')
+      }
+      if (info.last_en && manga.last_en !== info.last_en && newChapters.indexOf('en') === -1) {
+        alertChapters.push('en')
+      }
+      if (info.last && manga.last !== info.last && newChapters.indexOf('last') === -1) {
+        alertChapters.push('last')
+      }
+      newChapters = newChapters.concat(alertChapters)
+      if (alertChapters.length) {
+        if (Notification.isSupported()) {
+          this._tray.setImage(path.resolve(basePath, 'images', 'ext_icon_inactive_2.png'))
+          const notification = new Notification({
+            title: `New Chapters ${newChapters.join(' ')}!`,
+            body: `${info.title} has new chapter${newChapters.length > 1 ? 's' : ''}!`,
+            icon: path.resolve(basePath, 'images', 'ext_icon_inactive.png')
+          })
+          notification.once('click', (event) => {
+            console.log(info.url)
+            this.show()
+          })
+          notification.show()
+        }
+      }
+
+      deepObjectMerge(manga, info, {
+        json: {
+          image: newImage || manga.json.image,
+          newChapters
+        }
+      })
+      await this._storage.updateManga(manga)
       await (new Promise((resolve) => setTimeout(resolve, timeout)))
     }
     this._checkingChapters = false

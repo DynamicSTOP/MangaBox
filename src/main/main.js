@@ -5,6 +5,7 @@ import { app, BrowserWindow } from 'electron'
 const myApp = new App()
 
 app.allowRendererProcessReuse = true
+app.setAppUserModelId(process.execPath)
 
 app.on('ready', async () => {
   await myApp.initStorage()
