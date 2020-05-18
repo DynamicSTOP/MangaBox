@@ -1,12 +1,12 @@
 'use strict'
-
 const chalk = require('chalk')
 const electron = require('electron')
 const path = require('path')
+const fs = require('fs')
+const express = require('express')
 const { spawn } = require('child_process')
 const webpack = require('webpack')
 const WebpackDevServer = require('webpack-dev-server')
-
 
 const mainConfig = require('./webpack.main.config')
 const rendererConfig = require('./webpack.renderer.config')
@@ -28,8 +28,8 @@ function logStats (proc, data) {
     }).split(/\r?\n/).forEach(line => {
 
       /* this line suppress out of img assets... since there is too many of those */
-      if (proc === 'Renderer' && JSON.stringify(line).match(/^"\s*\\u001b\[1m\\u001b\[32mimgs\/\d+(_d)?--ships\.png/)){
-        if(!images){
+      if (proc === 'Renderer' && JSON.stringify(line).match(/^"\s*\\u001b\[1m\\u001b\[32mimgs\/\d+(_d)?--ships\.png/)) {
+        if (!images) {
           log += '  ' + line + '\n'
           log += '       ... suppressed rows check dev-runner.js ...\n'
           images = true
@@ -119,14 +119,12 @@ function startRenderer () {
         quiet: true,
         // hot: true,
         proxy: {
-          '/background.js': {
-            secure:false,
-            changeOrigin: true,
-            target: 'http://localhost:9080/src/background/'
-          }
+          // generally proxy can be used instead of express, but there are memory leaks there
+          // and i can't be bothered to look where exactly
+          '/loadLocal': 'http://localhost:9081'
         },
-        onListening: function(){
-          resolve();
+        onListening: function () {
+          resolve()
         }
       }
     )
@@ -162,8 +160,8 @@ function startElectron () {
   })
 }
 
-function init(){
-  console.log("Starting in dev mode")
+function init () {
+  console.log('Starting in dev mode')
 
   Promise.all([startMain(), startRenderer()])
     .then(() => {
@@ -175,3 +173,22 @@ function init(){
 }
 
 init()
+
+const app = express()
+app.get('/loadLocal/*', (req, res) => {
+  const filePath = Buffer.from(req.url.replace('/loadLocal/', ''), 'base64').toString()
+  if (filePath.match(/\.jpg$/)) {
+    res.setHeader('content-type', 'image/jpeg')
+  } else if (filePath.match(/\.jpg$/)) {
+    res.setHeader('content-type', 'image/png')
+  }
+  const absFilePath = path.resolve(__dirname, '..', filePath)
+  const body = fs.readFileSync(absFilePath, 'base64')
+  const buf = Buffer.from(body, 'base64')
+  res.setHeader('content-length', buf.length)
+  res.setHeader('cache-control', 'no-store,max-age=0')
+  res.write(buf)
+  res.end()
+})
+
+app.listen(9081, () => init())

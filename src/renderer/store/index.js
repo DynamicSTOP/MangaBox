@@ -15,7 +15,8 @@ const store = new Vuex.Store({
     isManga: false,
     isChapter: false,
     isAddingManga: false,
-    isMangaStored: false
+    isMangaStored: false,
+    allManga: []
   },
   getters: {
     isManga (state) {
@@ -34,6 +35,7 @@ const store = new Vuex.Store({
     CONFIG_UPDATE (store, newConfig) {
       store.isLoading = false
       store.sites = newConfig.sites
+      store.allManga = newConfig.allManga
     },
     SITE_NAVIGATED (store) {
       store.isNavigating = false

@@ -204,15 +204,7 @@ class App {
   async parseMessageFromRenderer (type = '', data) {
     switch (type) {
       case 'APP_LOADED':
-        this.sendToRenderer('APP_CONFIG', {
-          sites: this.sites.map((s, i) => {
-            return {
-              index: i,
-              text: s.name,
-              pattern: s.pattern
-            }
-          })
-        })
+        await this.sendAppInitialConfig()
         break
       case 'SITE_NAVIGATE':
         this.siteNavigate(data)
@@ -233,6 +225,39 @@ class App {
         })
         break
     }
+  }
+
+  async sendAppInitialConfig () {
+    // get manga info and update paths to local
+    const allManga = await this._storage.getAllManga()
+    await Promise.all(allManga.map(async (manga, index) => {
+      if (manga.json.image) {
+        const storedPath = await this._storage.getFromPathsByUrl(manga.json.image)
+        if (storedPath) {
+          if (process.env.NODE_ENV === 'production') {
+            allManga[index].json.image = 'file://' + path.resolve(process.cwd(), storedPath.path)
+          } else {
+            allManga[index].json.image = '/loadLocal/' + Buffer.from(storedPath.path).toString('base64')
+          }
+        } else {
+          allManga[index].json.image = null
+        }
+      }
+    }))
+
+    const sites = this.sites.map((s, i) => {
+      return {
+        index: i,
+        text: s.name,
+        pattern: s.pattern
+      }
+    })
+
+    return this.sendToRenderer('APP_CONFIG',
+      {
+        allManga,
+        sites
+      })
   }
 
   /**
