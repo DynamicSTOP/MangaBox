@@ -403,7 +403,7 @@ export class NetworkWatcher extends EventEmitter {
     if (method === 'Fetch.requestPaused') {
       const requestType = params.responseHeaders ? 'Response' : 'Request'
       const { method, url, headers, postData } = params.request
-      const { requestId, responseHeaders } = params
+      const { requestId, responseHeaders, responseStatusCode } = params
       try {
         if (requestType === 'Request') {
           if (this.shouldFailUrl(url) && this._debugger) {
@@ -442,7 +442,9 @@ export class NetworkWatcher extends EventEmitter {
             }
           }
         } else {
-          await this.updateCache(method, url, headers, responseHeaders, requestId, postData)
+          if (responseStatusCode === 200) {
+            await this.updateCache(method, url, headers, responseHeaders, requestId, postData)
+          }
           await this.emitResponse(method, url, headers, responseHeaders, requestId, postData)
         }
       } catch (e) {
