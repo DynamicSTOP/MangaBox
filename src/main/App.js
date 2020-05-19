@@ -16,8 +16,6 @@ import MangaDex from './MangaSites/MangaDex'
 import storage from './Storage'
 
 const enabledSites = [Google, MangaDex]
-const basePath = process.env.NODE_ENV === 'production' ? path.resolve(__dirname) : path.resolve(__dirname, '..')
-const mainNetworkWatcher = new NetworkWatcher()
 
 const deepObjectMerge = (target, ...sources) => {
   if (target === null || typeof target !== 'object') return
@@ -36,7 +34,9 @@ const deepObjectMerge = (target, ...sources) => {
 }
 
 class App {
-  constructor () {
+  constructor (pathsConfig = {}) {
+    this._pathsConfig = pathsConfig
+    this.mainNetworkWatcher = new NetworkWatcher(pathsConfig)
     this._window = null
     this._debug = process.env.NODE_ENV === 'development'
     this._siteView = null
@@ -48,8 +48,7 @@ class App {
     this._storage = null
     this._savedTraffic = 0
     this._currentSite = null
-    this._lastManga = null
-    this.__savedTrafficTimeout = null
+    this._savedTrafficTimeout = null
     /**
      *
      * @type {null|Electron.Tray}
@@ -58,12 +57,12 @@ class App {
     this._tray = null
     this.sites = []
 
-    mainNetworkWatcher.on('loadedFromCache', this.updateSavedSize.bind(this))
+    this.mainNetworkWatcher.on('loadedFromCache', this.updateSavedSize.bind(this))
     this.addSites()
   }
 
   addTrayIcon () {
-    this._tray = new Tray(path.resolve(basePath, 'images', 'ext_icon_inactive.png'))
+    this._tray = new Tray(path.resolve(this._pathsConfig.imagesAbs, 'ext_icon_inactive.png'))
     const contextMenu = Menu.buildFromTemplate([
       {
         id: 2,
@@ -89,7 +88,6 @@ class App {
     this._window = null
     this._siteView = null
     this._currentSite = null
-    this._lastManga = null
   }
 
   addSites () {
@@ -98,16 +96,16 @@ class App {
       const rules = site.getNetworkWatcherRulesSet()
       if (!rules) return
       rules.marker = site.id
-      mainNetworkWatcher.addWatcherRules(rules)
+      this.mainNetworkWatcher.addWatcherRules(rules)
     })
-    mainNetworkWatcher.on('Request', (request) => {
+    this.mainNetworkWatcher.on('Request', (request) => {
       this.sites.map((site) => {
         if (site.id === request.marker) {
           site.parseRequest(request)
         }
       })
     })
-    mainNetworkWatcher.on('Response', (response) => {
+    this.mainNetworkWatcher.on('Response', (response) => {
       this.sites.map((site) => {
         if (site.id === response.marker) {
           site.parseResponse(response)
@@ -137,7 +135,7 @@ class App {
       width,
       height,
       webPreferences: {
-        preload: path.resolve(basePath, 'preload', 'preload.js'),
+        preload: path.resolve(this._pathsConfig.preloadAbs, 'preload.js'),
         nodeIntegration: false,
         nodeIntegrationInWorker: false,
         contextIsolation: true,
@@ -146,7 +144,7 @@ class App {
       },
       titleBarStyle: 'hidden',
       title: 'MangaBox',
-      icon: path.resolve(basePath, 'images', 'ext_icon_inactive.png'),
+      icon: path.resolve(this._pathsConfig.imagesAbs, 'ext_icon_inactive.png'),
       frame: false
     })
 
@@ -243,21 +241,34 @@ class App {
     }
   }
 
+  async getLocalImagePath (url = '') {
+    const row = await this._storage.getFromPathsByUrl(url)
+    if (row) {
+      if (process.env.NODE_ENV === 'production') {
+        if (row.stored) {
+          return 'file://' + path.resolve(this._pathsConfig.mangaDirAbs, row.path)
+        } else {
+          return 'file://' + path.resolve(this._pathsConfig.cacheDirAbs, row.path)
+        }
+      } else {
+        if (row.stored) {
+          return '/loadLocal/' + Buffer.from(path.resolve(this._pathsConfig.mangaDirAbs, row.path)).toString('base64')
+        } else {
+          return '/loadLocal/' + Buffer.from(path.resolve(this._pathsConfig.cacheDirAbs, row.path)).toString('base64')
+        }
+      }
+    }
+    return null
+  }
+
   async sendAppInitialConfig () {
     // get manga info and update paths to local
     const allManga = await this._storage.getAllManga()
     await Promise.all(allManga.map(async (manga, index) => {
       if (manga.json.image) {
-        const storedPath = await this._storage.getFromPathsByUrl(manga.json.image)
-        if (storedPath) {
-          if (process.env.NODE_ENV === 'production') {
-            allManga[index].json.image = 'file://' + path.resolve(process.cwd(), storedPath.path)
-          } else {
-            allManga[index].json.image = '/loadLocal/' + Buffer.from(storedPath.path).toString('base64')
-          }
-        } else {
-          allManga[index].json.image = null
-        }
+        allManga[index].json.image = await this.getLocalImagePath(manga.json.image)
+      } else {
+        allManga[index].json.image = null
       }
     }))
 
@@ -293,9 +304,9 @@ class App {
 
   async initStorage () {
     this._storage = storage
-    await this._storage.init()
+    await this._storage.init(this._pathsConfig)
     this.sites.map((site) => site.setStorage(storage))
-    mainNetworkWatcher.setStorage(storage)
+    this.mainNetworkWatcher.setStorage(storage)
   }
 
   /**
@@ -336,7 +347,7 @@ class App {
         webviewTag: false
       }
     })
-    mainNetworkWatcher.attach(this._siteView.webContents)
+    this.mainNetworkWatcher.attach(this._siteView.webContents)
     this._window.addBrowserView(this._siteView)
     this._siteView.setBounds({
       x: 0,
@@ -439,7 +450,7 @@ class App {
     })
 
     if (this._storage) {
-      const tempWatcher = new NetworkWatcher()
+      const tempWatcher = new NetworkWatcher(this._pathsConfig)
       tempWatcher.on('loadedFromCache', this.updateSavedSize.bind(this))
       tempWatcher.setStorage(this._storage)
       tempWatcher.attach(hiddenWindow.webContents)
@@ -480,11 +491,11 @@ class App {
       newChapters = newChapters.concat(alertChapters)
       if (alertChapters.length) {
         if (Notification.isSupported()) {
-          this._tray.setImage(path.resolve(basePath, 'images', 'ext_icon_inactive_2.png'))
+          this._tray.setImage(path.resolve(this._pathsConfig.imagesAbs, 'ext_icon_inactive_2.png'))
           const notification = new Notification({
             title: `New Chapters ${newChapters.join(' ')}!`,
             body: `${info.title} has new chapter${newChapters.length > 1 ? 's' : ''}!`,
-            icon: path.resolve(basePath, 'images', 'ext_icon_inactive.png')
+            icon: path.resolve(this._pathsConfig.imagesAbs, 'ext_icon_inactive.png')
           })
           notification.once('click', (event) => {
             console.log(info.url)
@@ -501,6 +512,7 @@ class App {
         }
       })
       await this._storage.updateManga(manga)
+      manga.json.image = await this.getLocalImagePath(manga.json.image)
       this.sendToRenderer('MANGA_UPDATED', manga)
       await (new Promise((resolve) => setTimeout(resolve, timeout)))
     }

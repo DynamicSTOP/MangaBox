@@ -29,11 +29,10 @@ const checkRule = (rulesGroup, asRegexp = false, toLower) => {
   return rulesGroup
 }
 
-const baseDirPath = process.env.NODE_ENV === 'production' ? path.resolve('./') : path.resolve(__dirname, '..', '..')
-
 export class NetworkWatcher extends EventEmitter {
-  constructor () {
+  constructor (pathsConfig = {}) {
     super()
+    this._pathsConfig = pathsConfig
     /**
      *
      * @type {null|Electron.WebContents}
@@ -212,7 +211,7 @@ export class NetworkWatcher extends EventEmitter {
       const row = await this._storage.getFromPathsByUrl(url)
       if (row === false) return false
 
-      const cachedPath = path.resolve(baseDirPath, row.path)
+      const cachedPath = path.resolve(row.stored ? this._pathsConfig.mangaDirAbs : this._pathsConfig.cacheDirAbs, row.path)
       if (!fs.existsSync(cachedPath)) {
         await this._storage.deleteFromPathsByUrl(url)
         return false
@@ -243,7 +242,7 @@ export class NetworkWatcher extends EventEmitter {
             Object.assign(info, cacheControlInfo)
             info.date = new Date().getTime()
             info.responseHeaders = validation.responseHeaders.filter(h => ['set-cookie', 'authorization', 'age'].indexOf(h.name) === -1)
-            await this._storage.addToPaths(url, path.relative(baseDirPath, cachedPath), info, stored)
+            await this._storage.addToPaths(url, row.path, info, stored)
             if (validation.statusCode === 200) {
               fs.writeFileSync(cachedPath, validation.body, 'base64')
               body = validation.body

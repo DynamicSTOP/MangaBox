@@ -1,16 +1,62 @@
 // Modules to control application life and create native browser window
-import App from './App'
 import { app, BrowserWindow } from 'electron'
+import path from 'path'
+import fs from 'fs'
+import App from './App'
 
-const myApp = new App()
+const notProd = process.env.NODE_ENV !== 'production'
+const applicationPaths = {
+  cacheDirName: 'cache',
+  mangaDirName: 'manga',
+  basePath: notProd ? path.resolve(__dirname, '..', '..') : path.resolve(__dirname)
+}
+
+applicationPaths.cacheDirAbs = path.resolve(applicationPaths.basePath, applicationPaths.cacheDirName)
+applicationPaths.mangaDirAbs = path.resolve(applicationPaths.basePath, applicationPaths.mangaDirName)
+applicationPaths.storageAbs = path.resolve(applicationPaths.basePath, 'storage.sqlite')
+if (notProd) {
+  applicationPaths.preloadAbs = path.resolve(applicationPaths.basePath, 'src', 'preload')
+  applicationPaths.imagesAbs = path.resolve(applicationPaths.basePath, 'src', 'images')
+} else {
+  applicationPaths.preloadAbs = path.resolve(applicationPaths.basePath, 'preload')
+  applicationPaths.imagesAbs = path.resolve(applicationPaths.basePath, 'images')
+}
+
+if (fs.existsSync(path.resolve(applicationPaths.basePath, 'config.json'))) {
+  try {
+    const savedPaths = JSON.parse(fs.readFileSync(path.resolve(applicationPaths.basePath, 'config.json'), 'utf8'))
+    Object.assign(applicationPaths, savedPaths)
+  } catch (e) {
+    console.error(e)
+  }
+}
+// fs.writeFileSync(path.resolve(applicationPaths.basePath, 'config.json'), JSON.stringify(applicationPaths, false, ' '), 'utf8')
+
+if (!fs.existsSync(applicationPaths.cacheDirAbs)) {
+  fs.mkdirSync(applicationPaths.cacheDirAbs)
+  if (notProd) {
+    fs.writeFileSync(path.resolve(applicationPaths.cacheDirAbs, '.gitignore'), '*', 'utf8')
+  }
+}
+if (!fs.existsSync(applicationPaths.mangaDirAbs)) {
+  fs.mkdirSync(applicationPaths.mangaDirAbs)
+  if (notProd) {
+    fs.writeFileSync(path.resolve(applicationPaths.mangaDirAbs, '.gitignore'), '*.*', 'utf8')
+  }
+}
+
+const myApp = new App(applicationPaths)
 
 app.allowRendererProcessReuse = true
 app.setAppUserModelId(process.execPath)
 
+const noShow = process.argv.some(arg => arg === '--noshow')
 app.on('ready', async () => {
   await myApp.initStorage()
   myApp.addTrayIcon()
-  myApp.show()
+  if (!noShow) {
+    myApp.show()
+  }
   myApp.attachHandlers()
   myApp.startChecks()
 })

@@ -3,10 +3,6 @@ import fs from 'fs'
 import path from 'path'
 
 const sqlite = sqlite3.verbose()
-const basePath = process.env.NODE_ENV === 'production' ? path.resolve('./') : path.resolve(__dirname, '..', '..')
-const dbPath = path.resolve(basePath, 'storage.sqlite')
-const backupPath = path.resolve(basePath, 'manga', 'backup.json')
-const backupPathsPath = path.resolve(basePath, 'manga', 'backup_paths.json')
 
 class Storage {
   constructor () {
@@ -16,33 +12,28 @@ class Storage {
      */
     this.db = null
     this._dumping = false
-    setTimeout(() => this._dumpStorage(), 30 * 60 * 1000)
-    this._id = 0
+    this._pathsConfig = {}
   }
 
-  async init () {
-    const initDB = !fs.existsSync(dbPath)
-    this.db = new sqlite.Database(dbPath)
+  async init (pathsConfig = {}) {
+    pathsConfig.backupPath = path.resolve(pathsConfig.mangaDirAbs, 'backup.json')
+    pathsConfig.backupPathsPath = path.resolve(pathsConfig.mangaDirAbs, 'backup_paths.json')
+    this._pathsConfig = pathsConfig
+
+    const initDB = !fs.existsSync(pathsConfig.storageAbs)
+    this.db = new sqlite.Database(pathsConfig.storageAbs)
     if (initDB) {
       await this._initDB()
     }
-    if (!fs.existsSync(path.resolve(basePath, 'cache'))) {
-      fs.mkdirSync(path.resolve(basePath, 'cache'))
-      fs.writeFileSync(path.resolve(basePath, 'cache', '.gitignore'), '*', 'utf8')
-    }
-    if (!fs.existsSync(path.resolve(basePath, 'manga'))) {
-      fs.mkdirSync(path.resolve(basePath, 'manga'))
-      fs.writeFileSync(path.resolve(basePath, 'manga', '.gitignore'), '*.*', 'utf8')
-    }
     await this._checkStorage()
+    setTimeout(() => this._dumpStorage(), 30 * 60 * 1000)
   }
 
   async _checkStorage () {
     const allManga = await this.getAllManga()
-
-    if (allManga.length === 0 && fs.existsSync(backupPath)) {
+    if (allManga.length === 0 && fs.existsSync(this._pathsConfig.backupPath)) {
       try {
-        const mangaArray = JSON.parse(fs.readFileSync(backupPath, 'utf8'))
+        const mangaArray = JSON.parse(fs.readFileSync(this._pathsConfig.backupPath, 'utf8'))
         for (let i = 0; i < mangaArray.length; i++) {
           await this.addManga(mangaArray[i])
         }
@@ -51,9 +42,9 @@ class Storage {
       }
 
       const storedPaths = await this.getAllStoredPaths()
-      if (storedPaths.length === 0 && fs.existsSync(backupPathsPath)) {
+      if (storedPaths.length === 0 && fs.existsSync(this._pathsConfig.backupPathsPath)) {
         try {
-          const paths = JSON.parse(fs.readFileSync(backupPathsPath, 'utf8'))
+          const paths = JSON.parse(fs.readFileSync(this._pathsConfig.backupPathsPath, 'utf8'))
           for (let i = 0; i < paths.length; i++) {
             const { url, path, info, stored } = paths[i]
             await this.addToPaths(url, path, info, stored)
@@ -69,9 +60,9 @@ class Storage {
     if (this._dumping) return
     this._dumping = true
     const allManga = await this.getAllManga()
-    fs.writeFileSync(backupPath, JSON.stringify(allManga), 'utf8')
+    fs.writeFileSync(this._pathsConfig.backupPath, JSON.stringify(allManga), 'utf8')
     const allStoredPaths = await this.getAllStoredPaths()
-    fs.writeFileSync(backupPathsPath, JSON.stringify(allStoredPaths), 'utf8')
+    fs.writeFileSync(this._pathsConfig.backupPathsPath, JSON.stringify(allStoredPaths), 'utf8')
     this._dumping = false
   }
 
@@ -164,12 +155,11 @@ class Storage {
       const rowStored = await this.getFromPathsByUrl(url)
       if (rowStored) {
         await this.addToPaths(url, rowStored.path, info, rowStored.stored)
-        fs.writeFileSync(path.resolve(basePath, rowStored.path), body, info.base64Encoded ? 'base64' : 'utf8')
+        fs.writeFileSync(path.resolve(this._pathsConfig.mangaDirAbs, rowStored.path), body, info.base64Encoded ? 'base64' : 'utf8')
       } else {
         const row = await this.addToPaths(url, '', info, false)
-        const storedPath = path.relative(basePath, path.resolve(basePath, 'cache', row.id.toString()))
-        await this.addToPaths(url, storedPath, info, false)
-        fs.writeFileSync(path.resolve(basePath, storedPath), body, info.base64Encoded ? 'base64' : 'utf8')
+        await this.addToPaths(url, row.id.toString(), info, false)
+        fs.writeFileSync(path.resolve(this._pathsConfig.cacheDirAbs, row.id.toString()), body, info.base64Encoded ? 'base64' : 'utf8')
       }
       return true
     } catch (e) {
@@ -190,17 +180,30 @@ class Storage {
     return row
   }
 
-  async moveCachedFile (pathFrom = '', pathTo = '', stored = true) {
-    let row = await this._get('SELECT * FROM paths WHERE path = ?', [pathFrom])
+  async moveCachedFile (id = 0, pathTo = '', willBeStored = true) {
+    const row = await this._get('SELECT * FROM paths WHERE id = ?', [id])
     if (typeof row === 'undefined') return false
     try {
-      fs.renameSync(path.resolve(basePath, pathFrom), path.resolve(basePath, pathTo))
-      await this._run('UPDATE paths SET path = ?, stored = ? WHERE path = ?', [pathTo, stored, pathFrom])
-      row = await this.getFromPathsByUrl(row.url)
+      let from, to
+
+      if (row.stored) {
+        from = path.resolve(this._pathsConfig.mangaDirAbs, row.path)
+      } else {
+        from = path.resolve(this._pathsConfig.cacheDirAbs, row.path)
+      }
+
+      if (willBeStored) {
+        to = path.resolve(this._pathsConfig.mangaDirAbs, pathTo)
+      } else {
+        to = path.resolve(this._pathsConfig.cacheDirAbs, pathTo)
+      }
+
+      fs.renameSync(from, to)
+      await this._run('UPDATE paths SET path = ?, stored = ? WHERE id = ?', [pathTo, willBeStored, id])
+      return await this.getFromPathsByUrl(row.url)
     } catch (e) {
       return false
     }
-    return row
   }
 
   async isPathExistsAndNotStored (url = '') {

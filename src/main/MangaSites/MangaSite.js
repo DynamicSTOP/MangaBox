@@ -174,7 +174,7 @@ export class MangaSite {
       const row = await this._storage.getFromPathsByUrl(manga.json.image)
       if (row && row.stored === false) {
         const ext = getFileExtensionFromHeaders(row.info.responseHeaders)
-        await this._storage.moveCachedFile(row.path, `manga${path.sep}${manga.id}${ext}`)
+        await this._storage.moveCachedFile(row.id, `${manga.id}${ext}`, true)
       }
     }
   }

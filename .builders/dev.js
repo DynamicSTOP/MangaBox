@@ -191,8 +191,7 @@ app.get('/loadLocal/*', (req, res) => {
     res.write('not found')
     return
   }
-  const absFilePath = path.resolve(__dirname, '..', filePath)
-  const body = fs.readFileSync(absFilePath, 'base64')
+  const body = fs.readFileSync(filePath, 'base64')
   const buf = Buffer.from(body, 'base64')
   res.setHeader('content-length', buf.length)
   res.setHeader('cache-control', 'max-age=3600')
