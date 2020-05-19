@@ -8,7 +8,7 @@ const notProd = process.env.NODE_ENV !== 'production'
 const applicationPaths = {
   cacheDirName: 'cache',
   mangaDirName: 'manga',
-  basePath: notProd ? path.resolve(__dirname, '..', '..') : path.resolve(__dirname)
+  basePath: notProd ? path.resolve(__dirname, '..', '..') : path.resolve('./')
 }
 
 applicationPaths.cacheDirAbs = path.resolve(applicationPaths.basePath, applicationPaths.cacheDirName)
