@@ -481,14 +481,14 @@ export class NetworkWatcher extends EventEmitter {
           resolve({
             result: true,
             statusCode: result.statusCode,
-            gzip: Object.keys(result.headers)
-              .some((k) => k.toLowerCase() === 'content-encoding' && result.headers[k].toLowerCase() === 'gzip'),
-            responseHeaders: Object.keys(result.headers).map(k => {
-              return {
-                name: k.toLowerCase(),
-                value: result.headers[k]
-              }
-            }),
+            responseHeaders: Object.keys(result.headers)
+              .filter(k => k.toLowerCase() !== 'accept-encoding')
+              .map(k => {
+                return {
+                  name: k.toLowerCase(),
+                  value: result.headers[k]
+                }
+              }),
             body: body.toString('base64')
           })
         })
