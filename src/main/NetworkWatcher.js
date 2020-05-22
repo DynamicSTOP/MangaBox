@@ -3,6 +3,7 @@ import EventEmitter from 'events'
 import path from 'path'
 import fs from 'fs'
 import https from 'https'
+import { inflateSync, gunzipSync, brotliDecompressSync } from 'zlib'
 
 const checkRule = (rulesGroup, asRegexp = false, toLower) => {
   if (typeof rulesGroup === 'undefined') return false
@@ -227,6 +228,7 @@ export class NetworkWatcher extends EventEmitter {
           if (!validation.result) {
             return false
           } else {
+            console.log('revalidate', url, validation.statusCode, validation.gzip)
             if (validation.statusCode !== 200 && validation.statusCode !== 304) {
               return false
             }
@@ -466,16 +468,21 @@ export class NetworkWatcher extends EventEmitter {
       if (ua) {
         options.headers[ua] = currentHeaders[ua]
       }
-      let body = Buffer.from('')
+      options.headers['accept-encoding'] = 'gzip, deflate, br'
 
+      let body = Buffer.from('')
       const req = https.request(info.url, options, (result) => {
         result.on('data', (chunk) => {
           body = Buffer.concat([body, chunk])
         })
-        result.on('end', () => {
+
+        result.on('end', async () => {
+          body = await this._decodeRevalidateBody(result, body)
           resolve({
             result: true,
             statusCode: result.statusCode,
+            gzip: Object.keys(result.headers)
+              .some((k) => k.toLowerCase() === 'content-encoding' && result.headers[k].toLowerCase() === 'gzip'),
             responseHeaders: Object.keys(result.headers).map(k => {
               return {
                 name: k.toLowerCase(),
@@ -492,6 +499,36 @@ export class NetworkWatcher extends EventEmitter {
         resolve({ result: false })
       })
       req.end()
+    })
+  }
+
+  /**
+   *
+   * @param result {Object}
+   * @param body {ArrayBuffer}
+   * @return {Promise<ArrayBuffer>}
+   */
+  _decodeRevalidateBody (result, body) {
+    return new Promise((resolve, reject) => {
+      const encoding = Object.keys(result.headers).find((k) => k.toLowerCase() === 'content-encoding')
+      if (encoding) {
+        switch (result.headers[encoding].toLowerCase()) {
+          case 'gzip':
+            resolve(gunzipSync(body))
+            break
+          case 'deflate':
+            resolve(inflateSync(body))
+            break
+          case 'br':
+            resolve(brotliDecompressSync(body))
+            break
+          default:
+            console.error('unknown encoding on revalidate', result.headers[encoding])
+            return reject(Error(`bad encoding "${result.headers[encoding]}"`))
+        }
+      } else {
+        resolve(body)
+      }
     })
   }
 }
