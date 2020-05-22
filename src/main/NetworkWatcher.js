@@ -228,7 +228,6 @@ export class NetworkWatcher extends EventEmitter {
           if (!validation.result) {
             return false
           } else {
-            console.log('revalidate', url, validation.statusCode, validation.gzip)
             if (validation.statusCode !== 200 && validation.statusCode !== 304) {
               return false
             }
