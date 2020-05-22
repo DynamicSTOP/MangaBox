@@ -7,7 +7,8 @@ import {
   session,
   Tray,
   Menu,
-  Notification
+  Notification,
+  app
 } from 'electron'
 import path from 'path'
 import { NetworkWatcher } from './NetworkWatcher'
@@ -77,9 +78,10 @@ class App {
       {
         id: 5,
         label: 'Exit',
-        role: 'quit'
+        click: () => this.exit()
       }
     ])
+    this._tray.on('double-click', () => this.show())
     this._tray.setToolTip('MangaBox')
     this._tray.setContextMenu(contextMenu)
   }
@@ -280,6 +282,7 @@ class App {
       }
     })
 
+    this.sendToRenderer('INFO_UPDATE', { savedTraffic: this._savedTraffic })
     return this.sendToRenderer('APP_CONFIG',
       {
         allManga,
@@ -305,8 +308,14 @@ class App {
   async initStorage () {
     this._storage = storage
     await this._storage.init(this._pathsConfig)
+    this._savedTraffic = (await this._storage.getFromVault('_savedTraffic') || 0)
     this.sites.map((site) => site.setStorage(storage))
     this.mainNetworkWatcher.setStorage(storage)
+  }
+
+  async exit () {
+    await this._storage.updateVault('_savedTraffic', this._savedTraffic)
+    app.quit()
   }
 
   /**

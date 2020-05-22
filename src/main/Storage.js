@@ -132,6 +132,9 @@ class Storage {
         ' FOREIGN KEY(manga_id) REFERENCES manga(id)' +
         ')')
       await this._run('CREATE INDEX chapter_id_index ON chapters (manga_id DESC, manga_site_chapter_id DESC)')
+
+      // vault (for settings and some temp stuff)
+      await this._run('CREATE TABLE vault (name VARCHAR(255) PRIMARY KEY, value text)')
     } catch (e) {
       console.error(e)
     }
@@ -330,6 +333,21 @@ class Storage {
         }))
       })
     })
+  }
+
+  async getFromVault (name = '') {
+    const row = await this._get('SELECT name, value FROM vault WHERE name=?', name)
+    if (row) {
+      try {
+        return JSON.parse(row.value)
+      } catch (e) {
+        console.error(e)
+      }
+    }
+  }
+
+  async updateVault (name = '', value) {
+    await this._run('INSERT OR REPLACE INTO vault (name, value) VALUES (?,?)', [name, JSON.stringify(value)])
   }
 }
 
