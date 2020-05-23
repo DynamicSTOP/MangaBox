@@ -104,6 +104,9 @@ const store = new Vuex.Store({
     MANGA_SET_VIEWED (context, manga) {
       sendMessageToMain('MANGA_SET_VIEWED', manga)
     },
+    MANGA_TOGGLE_SAVE (context, manga) {
+      sendMessageToMain('MANGA_TOGGLE_SAVE', manga)
+    },
     MANGA_UPDATED (context, manga) {
       context.commit('MANGA_UPDATED', manga)
     }

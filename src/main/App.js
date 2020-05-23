@@ -226,6 +226,15 @@ class App {
           this.sendToRenderer('MANGA_UPDATED', manga)
         }
         break
+      case 'MANGA_TOGGLE_SAVE':
+        if (data.id) {
+          const manga = await this._storage.getManga({ id: data.id })
+          if (!manga || manga.save === data.save) break
+          manga.save = data.save
+          await this._storage.updateManga(manga)
+          this.sendToRenderer('MANGA_UPDATED', manga)
+        }
+        break
       default:
         if (this._debug) {
           console.log('message from renderer', type, data)

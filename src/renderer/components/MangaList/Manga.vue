@@ -25,6 +25,15 @@ export default {
       } else {
         this.$store.dispatch('MANGA_OPEN', { id: this.manga.id })
       }
+    },
+    toggleSave () {
+      if (this.manga.save) return
+      if (confirm(`Save ${this.manga.title} ?`)) {
+        this.$store.dispatch('MANGA_TOGGLE_SAVE', {
+          id: this.manga.id,
+          save: true
+        })
+      }
     }
   }
 }
@@ -44,7 +53,11 @@ export default {
     <div
       class="manga-top flex-row"
     >
-      <div class="manga-save">
+      <div
+        class="manga-save"
+        :class="{saved:manga.save}"
+        @click.stop="toggleSave"
+      >
         S
       </div>
     </div>
