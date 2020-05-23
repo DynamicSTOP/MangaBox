@@ -8,7 +8,17 @@ export default {
     ...mapState(['savedTraffic', 'sites', 'isManga', 'isAddingManga', 'isMangaStored']),
     ...mapGetters(['isSiteViewOpen']),
     infoTitle () {
-      return `loaded ${this.savedTraffic} bytes from cache`
+      let saved = this.savedTraffic
+      const line = ['Bytes', 'Kb', 'Mb', 'Gb', 'Tb'].map((name, index) => {
+        const prevLevel = Math.pow(1024, index)
+        const level = prevLevel * 1024
+        const curSaved = saved % level
+        if (curSaved) {
+          saved -= curSaved
+          return `${curSaved / prevLevel} ${name}`
+        }
+      }).filter(s => s && s.length > 0).reverse().join(' ')
+      return `Loaded ${line} from cache`
     },
     savedTrafficMB () {
       return Math.floor(this.savedTraffic / 1024 / 1024)

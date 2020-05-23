@@ -79,10 +79,11 @@ export class NetworkWatcher extends EventEmitter {
 
   addWatcherRules (rulesSet = {}) {
     if (!rulesSet) return
-    const { headers, response, request, marker } = rulesSet
+    const { responseHeaders, headers, response, request, marker } = rulesSet
     rulesSet.request = checkRule(request, true)
     rulesSet.response = checkRule(response, true)
     rulesSet.headers = checkRule(headers, false, true)
+    rulesSet.responseHeaders = checkRule(responseHeaders, false, true)
     if (marker && this.watcherRulesSets.some(s => s.marker === marker)) {
       const index = this.watcherRulesSets.findIndex(s => s.marker === marker)
       this.watcherRulesSets[index] = rulesSet
@@ -110,20 +111,21 @@ export class NetworkWatcher extends EventEmitter {
   }
 
   filterHeaders (headers, rulesSet = {}) {
-    if (rulesSet.headers === false) {
-      return {}
-    }
-
     const filteredHeaders = {}
     if (headers instanceof Array) {
       // response is like this { name: 'status', value: '200' },
+      if (rulesSet.responseHeaders === false) {
+        return {}
+      }
       headers.map((oldHeader) => {
-        if (rulesSet.headers === true || rulesSet.headers.indexOf(oldHeader.name.toLowerCase()) !== -1) {
+        if (rulesSet.responseHeaders === true || rulesSet.responseHeaders.indexOf(oldHeader.name.toLowerCase()) !== -1) {
           filteredHeaders[oldHeader.name.toLowerCase()] = oldHeader.value
         }
       })
-      return filteredHeaders
     } else if (typeof headers === 'object') {
+      if (rulesSet.headers === false) {
+        return {}
+      }
       Object.keys(headers).map((oldHeader) => {
         if (rulesSet.headers === true || rulesSet.headers.indexOf(oldHeader.toLowerCase()) !== -1) {
           filteredHeaders[oldHeader.toLowerCase()] = headers[oldHeader]

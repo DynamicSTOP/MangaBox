@@ -114,6 +114,7 @@ export class MangaSite {
     //   request: false,
     //   response: [/\/api\//, /\.json/],
     //   headers: true
+    //   responseHeaders: true
     // }
     return false
   }
