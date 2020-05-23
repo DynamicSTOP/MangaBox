@@ -298,12 +298,18 @@ class Storage {
   }
 
   /**
-   *
+   * @param siteId {number}
    * @returns {Promise<Array.Object>}
    */
-  getAllManga () {
+  getAllManga (siteId = -1) {
+    let where = ''
+    let params = []
+    if (siteId !== -1) {
+      where = 'where site_id = ?'
+      params = [siteId]
+    }
     return new Promise((resolve, reject) => {
-      this.db.all('SELECT * from manga', (error, rows) => {
+      this.db.all(`SELECT * from manga ${where}`, params, (error, rows) => {
         if (error) {
           return reject(error)
         }

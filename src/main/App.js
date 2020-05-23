@@ -15,24 +15,9 @@ import { NetworkWatcher } from './NetworkWatcher'
 import Google from './MangaSites/Google'
 import MangaDex from './MangaSites/MangaDex'
 import storage from './Storage'
+import { deepObjectMerge } from './global'
 
 const enabledSites = [Google, MangaDex]
-
-const deepObjectMerge = (target, ...sources) => {
-  if (target === null || typeof target !== 'object') return
-
-  sources.filter((source) => source !== null && typeof source === 'object')
-    .map((source) => {
-      Object.keys(source).map((key) => {
-        // thanks javascript for typeof null === "object"
-        if (target[key] !== null && source[key] !== null && typeof target[key] === 'object' && typeof source[key] === 'object') {
-          deepObjectMerge(target[key], source[key])
-        } else {
-          target[key] = source[key]
-        }
-      })
-    })
-}
 
 class App {
   constructor (pathsConfig = {}) {
@@ -316,7 +301,7 @@ class App {
     this._storage = storage
     await this._storage.init(this._pathsConfig)
     this._savedTraffic = (await this._storage.getFromVault('_savedTraffic') || 0)
-    this.sites.map((site) => site.setStorage(storage))
+    this.sites.map(async (site) => await site.setStorage(storage))
     this.mainNetworkWatcher.setStorage(storage)
   }
 

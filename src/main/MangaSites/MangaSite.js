@@ -38,6 +38,12 @@ export class MangaSite {
      * @type {string}
      */
     this._url = ''
+
+    /**
+     *
+     * @type {Number[]}
+     */
+    this.saveMangaSiteIds = []
   }
 
   /**
@@ -51,9 +57,17 @@ export class MangaSite {
   /**
    *
    * @param storage {Storage}
+   * @returns {Promise<Array.Object>}
    */
-  setStorage (storage) {
+  async setStorage (storage) {
     this._storage = storage
+    const allManga = await storage.getAllManga()
+    allManga.map((manga) => {
+      if (manga.save && manga.site_id === this.id) {
+        this.saveMangaSiteIds.push(manga.manga_site_id)
+      }
+    })
+    return allManga
   }
 
   /**
