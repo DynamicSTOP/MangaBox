@@ -10,6 +10,10 @@ export default {
   computed: {
     isOld () {
       return !this.manga.json.newChapters || this.manga.json.newChapters.length === 0
+    },
+    newChapters () {
+      const chapters = this.manga.json.newChapters || []
+      return chapters.filter(c => ['ru', 'en'].indexOf(c) !== -1).sort().map(c => c[0].toUpperCase() + c.slice(1))
     }
   },
   methods: {
@@ -37,5 +41,15 @@ export default {
       :src="manga.json.image"
       :class="{old: isOld}"
     >
+    <div
+      class="manga-bottom flex-row"
+    >
+      <div
+        v-show="newChapters.length > 0"
+        class="manga-chapters"
+      >
+        {{ newChapters.join(', ') }}
+      </div>
+    </div>
   </div>
 </template>
