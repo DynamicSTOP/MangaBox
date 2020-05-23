@@ -38,7 +38,7 @@ class MangaDex extends MangaSite {
   async setStorage (storage) {
     const allManga = await super.setStorage(storage)
     allManga.map((manga) => {
-      this.rawMangaJSONSha[manga.manga_site_id] = getSHA(JSON.stringify(manga.json.raw))
+      this.rawMangaJSONSha[manga.manga_site_id] = getSHA(JSON.stringify(manga.json.raw || null))
     })
     return allManga
   }
