@@ -17,7 +17,10 @@ export default {
 <template>
   <div>
     <top-bar />
-    <div v-show="!isSiteViewOpen">
+    <div
+      v-show="!isSiteViewOpen"
+      class="content"
+    >
       <manga-list />
     </div>
   </div>
