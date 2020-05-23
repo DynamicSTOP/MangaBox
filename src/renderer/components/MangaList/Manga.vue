@@ -33,14 +33,21 @@ export default {
   <div
     class="manga"
     :title="manga.title"
+    :class="{old: isOld}"
     @click.stop="openManga"
   >
     <img
       v-if="manga.json.image"
       class="title"
       :src="manga.json.image"
-      :class="{old: isOld}"
     >
+    <div
+      class="manga-top flex-row"
+    >
+      <div class="manga-save">
+        S
+      </div>
+    </div>
     <div
       class="manga-bottom flex-row"
     >
