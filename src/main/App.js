@@ -170,15 +170,7 @@ class App {
         this._window.webContents.openDevTools()
       }
     })
-    globalShortcut.register('CommandOrControl+Shift+K', () => {
-      // TODO ask for destroy, then kill
-      if (this._siteView !== null) {
-        this._window.removeBrowserView(this._siteView)
-        this._siteView.destroy()
-        this._siteView = null
-        this.sendToRenderer('SITE_NAVIGATED', null)
-      }
-    })
+    globalShortcut.register('CommandOrControl+Shift+K', this.closeSiteView.bind(this))
   }
 
   attachMessenger () {
@@ -208,6 +200,9 @@ class App {
         break
       case 'SITE_NAVIGATE':
         this.siteNavigate(data)
+        break
+      case 'SITE_CLOSE':
+        this.closeSiteView()
         break
       case 'MANGA_ADD':
         if (this._currentSite) {
@@ -283,11 +278,14 @@ class App {
     })
 
     this.sendToRenderer('INFO_UPDATE', { savedTraffic: this._savedTraffic })
-    return this.sendToRenderer('APP_CONFIG',
+    this.sendToRenderer('APP_CONFIG',
       {
         allManga,
         sites
       })
+    if (this._siteView) {
+      this.sendToRenderer('SITE_NAVIGATED', this._siteView.webContents.getURL())
+    }
   }
 
   /**
@@ -338,6 +336,15 @@ class App {
         this.updateSavedSize()
       }
     })
+  }
+
+  closeSiteView () {
+    if (this._siteView !== null) {
+      this._window.removeBrowserView(this._siteView)
+      this._siteView.destroy()
+      this._siteView = null
+      this.sendToRenderer('SITE_NAVIGATED', null)
+    }
   }
 
   createSiteView () {

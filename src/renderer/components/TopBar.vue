@@ -1,11 +1,12 @@
 <script>
-import { mapState } from 'vuex'
+import { mapState, mapGetters } from 'vuex'
 import OpenSite from './TopBar/OpenSite'
 export default {
   name: 'TopBar',
   components: { OpenSite },
   computed: {
     ...mapState(['savedTraffic', 'sites', 'isManga', 'isAddingManga', 'isMangaStored']),
+    ...mapGetters(['isSiteViewOpen']),
     infoTitle () {
       return `loaded ${this.savedTraffic} bytes from cache`
     },
@@ -24,6 +25,11 @@ export default {
       if (this.isActive) {
         this.$store.dispatch('MANGA_ADD')
       }
+    },
+    close () {
+      if (this.isSiteViewOpen) {
+        this.$store.dispatch('SITE_CLOSE')
+      }
     }
   }
 }
@@ -34,16 +40,25 @@ export default {
     id="topbar"
     class="flex-row"
   >
-    <div class="openSites flex-row">
-      <open-site
-        v-for="site in sites"
-        :key="'os_'+site.index"
-        :text="site.text"
-        :pattern="site.pattern"
-        :index="site.index"
-      />
+    <div class="flex-row">
+      <div
+        v-show="isSiteViewOpen"
+        class="closeSiteView"
+        @click="close"
+      >
+        X
+      </div>
+      <div class="openSites flex-row">
+        <open-site
+          v-for="site in sites"
+          :key="'os_'+site.index"
+          :text="site.text"
+          :pattern="site.pattern"
+          :index="site.index"
+        />
+      </div>
     </div>
-    <div class="topbar-right flex-row">
+    <div class="flex-row">
       <div
         id="topbar-info"
         :title="infoTitle"

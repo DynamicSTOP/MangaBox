@@ -77,6 +77,9 @@ const store = new Vuex.Store({
     SITE_NAVIGATE (context, url) {
       context.commit('SITE_NAVIGATE', url)
     },
+    SITE_CLOSE () {
+      sendMessageToMain('SITE_CLOSE')
+    },
     APP_LOADED () {
       sendMessageToMain('APP_LOADED')
     },
