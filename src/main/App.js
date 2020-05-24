@@ -71,10 +71,11 @@ class App {
     this._tray.setContextMenu(contextMenu)
   }
 
-  _resetParams () {
+  async onClose () {
     this._window = null
     this._siteView = null
     this._currentSite = null
+    await Promise.all(this.sites.map((s) => s.shutDown()))
   }
 
   addSites () {
@@ -141,7 +142,7 @@ class App {
       ? 'http://localhost:9080'
       : `file://${__dirname}/index.html`
 
-    this._window.on('closed', this._resetParams.bind(this))
+    this._window.on('closed', this.onClose.bind(this))
     this._window.maximize()
     this._window.loadURL(winURL)
   }
