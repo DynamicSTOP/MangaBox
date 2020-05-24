@@ -13,6 +13,7 @@ class Storage {
     this.db = null
     this._dumping = false
     this._pathsConfig = {}
+    this._dirCreated = {}
   }
 
   async init (pathsConfig = {}) {
@@ -183,6 +184,21 @@ class Storage {
     return row
   }
 
+  async getFromPathsByUrls (urls = []) {
+    return new Promise((resolve, reject) => {
+      this.db.all(`SELECT * FROM paths WHERE url in (${Array(urls.length).fill('?').join(',')}) and stored = false`, urls, (error, rows) => {
+        if (error) {
+          return reject(error)
+        }
+        resolve(rows.map(r => {
+          r.stored = !!r.stored
+          r.info = JSON.parse(r.info)
+          return r
+        }))
+      })
+    })
+  }
+
   async moveCachedFile (id = 0, pathTo = '', willBeStored = true) {
     const row = await this._get('SELECT * FROM paths WHERE id = ?', [id])
     if (typeof row === 'undefined') return false
@@ -207,6 +223,16 @@ class Storage {
     } catch (e) {
       return false
     }
+  }
+
+  /**
+   *
+   * @param instructions
+   * @return {Promise<void>}
+   */
+  async moveCachedFiles (instructions = []) {
+    // this._dirCreated
+    console.log(instructions)
   }
 
   async isPathExistsAndNotStored (url = '') {
@@ -272,14 +298,14 @@ class Storage {
 
   /**
    *
-   * @param from
+   * @param table
    * @param where
    * @param params
    * @return {Promise<boolean>}
    * @private
    */
-  async _getWithParams (from = '', where = [], params = []) {
-    const row = await this._get(`SELECT * FROM ${from} WHERE ` + where.join(' and '), params)
+  async _getWithParams (table = '', where = [], params = []) {
+    const row = await this._get(`SELECT * FROM ${table} WHERE ` + where.join(' and '), params)
     if (typeof row === 'undefined') return false
     try {
       if (typeof row.save !== 'undefined') {
@@ -350,7 +376,7 @@ class Storage {
   async addChapter (chapter = {}) {
     const row = await this.getChapter(chapter)
     if (row) return row
-    const { keys, params } = this._buildInsertParams(chapter, ['manga_id', 'manga_site_chapter_is', 'json'])
+    const { keys, params } = this._buildInsertParams(chapter, ['manga_id', 'manga_site_chapter_id', 'json'])
     await this._runInsert('chapters', keys, params)
     // this._dumpStorage()
     return await this.getChapter(chapter)
@@ -376,7 +402,7 @@ class Storage {
    */
   async updateChapter (chapter = {}) {
     if (!chapter.id) return
-    const { keys, params } = this._buildInsertParams(chapter, ['manga_id', 'manga_site_chapter_is', 'json'])
+    const { keys, params } = this._buildInsertParams(chapter, ['manga_id', 'manga_site_chapter_id', 'json'])
     params.push(chapter.id)
     await this._run('UPDATE chapters SET ' + keys.map((k) => `${k} = ?`).join(',') + ' WHERE id = ?', params)
     return await this.getChapter({ id: chapter.id })

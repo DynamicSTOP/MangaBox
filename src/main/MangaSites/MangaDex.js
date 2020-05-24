@@ -118,18 +118,19 @@ class MangaDex extends MangaSite {
   }
 
   async updateChapter (chapterJSON = {}) {
-    if (this.saveMangaSiteIds.indexOf(chapterJSON.manga_id) === -1) return
+    if (typeof this.saveMangaSiteIds[chapterJSON.manga_id] === 'undefined') return
     if (this.rawChaptersJSONSha[chapterJSON.id] && getSHA(JSON.stringify(chapterJSON)) === this.rawChaptersJSONSha[chapterJSON.id]) return
     this.rawChaptersJSONSha[chapterJSON.id] = getSHA(JSON.stringify(chapterJSON))
 
-    let chapter = this._storage.getChapter({
-      manga_id: chapterJSON.manga_id,
+    const mangaId = this.saveMangaSiteIds[chapterJSON.manga_id]
+    let chapter = await this._storage.getChapter({
+      manga_id: mangaId,
       manga_site_chapter_id: chapterJSON.id
     })
 
     if (!chapter) {
       chapter = await this._storage.addChapter({
-        manga_id: chapterJSON.manga_id,
+        manga_id: mangaId,
         manga_site_chapter_id: chapterJSON.id,
         json: chapterJSON
       })
@@ -137,13 +138,33 @@ class MangaDex extends MangaSite {
       chapter.json = chapterJSON
       await this._storage.updateChapter(chapter)
     }
+    const h = chapterJSON.hash ? chapterJSON.hash.slice(0, 4) : ''
     chapterJSON.page_array.map((pageFileName, pageNum) => {
       const fullPath = chapterJSON.server + chapterJSON.hash + '/' + pageFileName
       if (typeof this.imagePaths[fullPath] !== 'undefined') return
-      this.imagePaths[fullPath] = `${chapter.manga_id}/${chapter.id}/${chapterJSON.hash.slice(0, 4)}_${pageNum}_${pageFileName}}`
+      // TODO may be better redirect ? or check file sha1 at least
+      const fullPathSV = fullPath.replace('/data/', '/data-saver/')
+      this.imagePaths[fullPath] = `${mangaId}/${chapter.manga_site_chapter_id}/${h}_${pageNum + 1}_${pageFileName}`
+      this.imagePaths[fullPathSV] = `${mangaId}/${chapter.manga_site_chapter_id}/${h}_${pageNum + 1}_${pageFileName}`
       this.imageCheckStore.push(fullPath)
+      this.imageCheckStore.push(fullPathSV)
     })
-    console.log(this.imageCheckStore)
+    await this._moveToStoreImages()
+  }
+
+  async _moveToStoreImages () {
+    if (this.imageCheckStore.length === 0) return
+    const paths = await this._storage.getFromPathsByUrls(this.imageCheckStore)
+    if (paths && paths.length) {
+      await this._storage.moveCachedFiles(paths.map((p) => {
+        return {
+          id: p.id,
+          pathTo: this.imagePaths[p.url],
+          stored: p.stored,
+          willBeStored: true
+        }
+      }))
+    }
   }
 }
 
