@@ -24,8 +24,9 @@ class MangaDex extends MangaSite {
 
     this.rawMangaJSONSha = {}
     this.rawChaptersJSONSha = {}
-    this.imagePaths = {}
-    this.imageCheckStore = []
+    this.imageURLs = {}
+    this.globalURLStoCheck = []
+    this.globalURLStoCheckTO = null
   }
 
   isMangaURL (url = this._url) {
@@ -93,6 +94,15 @@ class MangaDex extends MangaSite {
         }
       }
     }
+    if (typeof this.imageURLs[response.url] !== 'undefined' && this.imageURLs[response.url] !== true) {
+      this.globalURLStoCheck.push(response.url)
+      if (this.globalURLStoCheckTO) {
+        clearTimeout(this.globalURLStoCheckTO)
+      }
+      this.globalURLStoCheckTO = setTimeout(() => {
+        this._moveToStoreImages(this.globalURLStoCheck.slice())
+      }, 2 * 60 * 1000)
+    }
   }
 
   async updateManga (url = '', mangaJSON = {}) {
@@ -139,32 +149,55 @@ class MangaDex extends MangaSite {
       await this._storage.updateChapter(chapter)
     }
     const h = chapterJSON.hash ? chapterJSON.hash.slice(0, 4) : ''
+    const URLStoCheck = []
     chapterJSON.page_array.map((pageFileName, pageNum) => {
-      const fullPath = chapterJSON.server + chapterJSON.hash + '/' + pageFileName
-      if (typeof this.imagePaths[fullPath] !== 'undefined') return
+      const fullURL = chapterJSON.server + chapterJSON.hash + '/' + pageFileName
+      if (typeof this.imageURLs[fullURL] !== 'undefined') return
       // TODO may be better redirect ? or check file sha1 at least
-      const fullPathSV = fullPath.replace('/data/', '/data-saver/')
-      this.imagePaths[fullPath] = `${mangaId}/${chapter.manga_site_chapter_id}/${h}_${pageNum + 1}_${pageFileName}`
-      this.imagePaths[fullPathSV] = `${mangaId}/${chapter.manga_site_chapter_id}/${h}_${pageNum + 1}_${pageFileName}`
-      this.imageCheckStore.push(fullPath)
-      this.imageCheckStore.push(fullPathSV)
+      const fullURLSV = fullURL.replace('/data/', '/data-saver/')
+      this.imageURLs[fullURL] = `${mangaId}/${chapter.manga_site_chapter_id}/${h}_${pageNum + 1}_${pageFileName}`
+      this.imageURLs[fullURLSV] = `${mangaId}/${chapter.manga_site_chapter_id}/${h}_${pageNum + 1}_${pageFileName}`
+      URLStoCheck.push(fullURL)
+      URLStoCheck.push(fullURLSV)
     })
-    await this._moveToStoreImages()
+    await this._moveToStoreImages(URLStoCheck)
   }
 
-  async _moveToStoreImages () {
-    if (this.imageCheckStore.length === 0) return
-    const paths = await this._storage.getFromPathsByUrls(this.imageCheckStore)
-    if (paths && paths.length) {
-      await this._storage.moveCachedFiles(paths.map((p) => {
-        return {
+  async _moveToStoreImages (URLStoCheck = []) {
+    if (URLStoCheck.length === 0) return
+    const paths = await this._storage.getFromPathsByUrls(URLStoCheck)
+    if (!paths || paths.length === 0) return
+
+    const pathsToStore = []
+    paths.map(p => {
+      if (p.stored) {
+        this.imageURLs[p.url] = true
+      } else {
+        pathsToStore.push({
           id: p.id,
-          pathTo: this.imagePaths[p.url],
+          url: p.url,
+          pathFrom: p.path,
           stored: p.stored,
+          pathTo: this.imageURLs[p.url],
           willBeStored: true
-        }
-      }))
+        })
+      }
+    })
+
+    if (pathsToStore.length !== 0) {
+      await this._storage.moveCachedFilesToManga(pathsToStore)
+      pathsToStore.map((p) => {
+        this.imageURLs[p.url] = true
+      })
     }
+    this.globalURLStoCheck = this.globalURLStoCheck.filter(g => paths.indexOf(g) === -1)
+  }
+
+  async shutDown () {
+    if (this.globalURLStoCheckTO) {
+      clearTimeout(this.globalURLStoCheckTO)
+    }
+    return await this._moveToStoreImages(this.globalURLStoCheck)
   }
 }
 

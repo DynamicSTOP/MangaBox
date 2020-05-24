@@ -13,7 +13,7 @@ class Storage {
     this.db = null
     this._dumping = false
     this._pathsConfig = {}
-    this._dirCreated = {}
+    this._dirExists = {}
   }
 
   async init (pathsConfig = {}) {
@@ -186,7 +186,7 @@ class Storage {
 
   async getFromPathsByUrls (urls = []) {
     return new Promise((resolve, reject) => {
-      this.db.all(`SELECT * FROM paths WHERE url in (${Array(urls.length).fill('?').join(',')}) and stored = false`, urls, (error, rows) => {
+      this.db.all(`SELECT * FROM paths WHERE url in (${Array(urls.length).fill('?').join(',')})`, urls, (error, rows) => {
         if (error) {
           return reject(error)
         }
@@ -230,9 +230,47 @@ class Storage {
    * @param instructions
    * @return {Promise<void>}
    */
-  async moveCachedFiles (instructions = []) {
-    // this._dirCreated
-    console.log(instructions)
+  async moveCachedFilesToManga (instructions = []) {
+    if (instructions.length === 0) return
+
+    const stmt = this.db.prepare('UPDATE paths SET path = ?, stored = ? WHERE id = ?')
+
+    await Promise.all(instructions.map(instruction =>
+      new Promise((resolve, reject) => {
+        // first check if dir exists
+        const checkDirs = instruction.pathTo.split('/')
+        checkDirs.pop()
+
+        if (instruction.willBeStored) {
+          const mangaDirFullPath = path.resolve(this._pathsConfig.mangaDirAbs, checkDirs.join('/'))
+          if (typeof this._dirExists[mangaDirFullPath] === 'undefined') {
+            fs.mkdirSync(mangaDirFullPath, { recursive: true })
+            this._dirExists[mangaDirFullPath] = true
+          }
+        }
+
+        let from, to
+
+        if (instruction.stored) {
+          from = path.resolve(this._pathsConfig.mangaDirAbs, instruction.pathFrom)
+        } else {
+          from = path.resolve(this._pathsConfig.cacheDirAbs, instruction.pathFrom)
+        }
+
+        if (instruction.willBeStored) {
+          to = path.resolve(this._pathsConfig.mangaDirAbs, instruction.pathTo)
+        } else {
+          to = path.resolve(this._pathsConfig.cacheDirAbs, instruction.pathTo)
+        }
+        fs.renameSync(from, to)
+        stmt.run(instruction.pathTo, instruction.willBeStored, instruction.id, (err) => {
+          if (err !== null) {
+            reject(err)
+          }
+          resolve()
+        })
+      })
+    ))
   }
 
   async isPathExistsAndNotStored (url = '') {

@@ -206,4 +206,12 @@ export class MangaSite {
     }
     return false
   }
+
+  /**
+   * finish moving manga etc
+   * @return {Promise<boolean>}
+   */
+  async shutDown () {
+    return true
+  }
 }

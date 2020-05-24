@@ -307,6 +307,7 @@ class App {
 
   async exit () {
     await this._storage.updateVault('_savedTraffic', this._savedTraffic)
+    await Promise.all(this.sites.map((s) => s.shutDown()))
     app.quit()
   }
 
