@@ -220,47 +220,47 @@ class Storage {
   }
 
   /**
-   *
-   * @param manga
-   * @returns {Promise<Object|false>}
+   * for selecting
+   * @param allowedKeys Array
+   * @param object Object
+   * @return {{where: [], params: []}}
+   * @private
    */
-  async getManga (manga = {}) {
-    const allowedKeys = ['manga_site_id', 'site_id', 'id', 'url']
+  _prepareWhereParams (allowedKeys = [], object = {}) {
     const where = []
     const params = []
-    Object.keys(manga)
+    Object.keys(object)
       .filter((k) => allowedKeys.indexOf(k) !== -1)
       .map((k) => {
         where.push(`${k} = ?`)
-        params.push(manga[k])
+        params.push(object[k])
       })
-    if (where.length === 0) return false
-
-    const row = await this._get('SELECT * FROM manga WHERE ' + where.join(' and '), params)
-    if (typeof row === 'undefined') return false
-    try {
-      row.save = !!row.save
-      row.json = JSON.parse(row.json)
-    } catch (e) {
-      return false
+    return {
+      where,
+      params
     }
-    return row
   }
 
-  _buildMangaParams (manga) {
-    const allowedKeys = ['manga_site_id', 'title', 'site_id', 'url', 'save', 'json', 'last', 'last_en', 'last_ru', 'last_check']
+  /**
+   * For insert and update
+   * @param object
+   * @param allowedKeys
+   * @return {{keys: [], params: []}}
+   * @private
+   */
+  _buildInsertParams (object, allowedKeys = []) {
     const keys = []
     const params = []
-    Object.keys(manga)
+    Object.keys(object)
       .filter((k) => allowedKeys.indexOf(k) !== -1)
       .map((k) => {
         keys.push(k)
         switch (k) {
           case 'json':
-            params.push(JSON.stringify(manga[k]))
+            params.push(JSON.stringify(object[k]))
             break
           default:
-            params.push(manga[k])
+            params.push(object[k])
             break
         }
       })
@@ -272,16 +272,88 @@ class Storage {
 
   /**
    *
+   * @param from
+   * @param where
+   * @param params
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async _getWithParams (from = '', where = [], params = []) {
+    const row = await this._get(`SELECT * FROM ${from} WHERE ` + where.join(' and '), params)
+    if (typeof row === 'undefined') return false
+    try {
+      if (typeof row.save !== 'undefined') {
+        row.save = !!row.save
+      }
+      if (typeof row.json !== 'undefined') {
+        row.json = JSON.parse(row.json)
+      }
+      return row
+    } catch (e) {
+      return false
+    }
+  }
+
+  /**
+   * Selects from storage using params
+   * @param manga
+   * @returns {Promise<Object|false>}
+   */
+  async getManga (manga = {}) {
+    const { where, params } = this._prepareWhereParams(['manga_site_id', 'site_id', 'id', 'url'], manga)
+    if (where.length === 0) return false
+    return await this._getWithParams('manga', where, params)
+  }
+
+  /**
+   * Selects from storage using params
+   * @param chapter
+   * @return {Promise<Object|false>}
+   */
+  async getChapter (chapter = {}) {
+    const { where, params } = this._prepareWhereParams(['manga_id', 'manga_site_chapter_id', 'id'], chapter)
+    if (where.length === 0) return false
+    return await this._getWithParams('chapters', where, params)
+  }
+
+  /**
+   *
+   * @param table
+   * @param keys
+   * @param params
+   * @return {Promise<unknown>}
+   * @private
+   */
+  async _runInsert (table, keys, params) {
+    return await this._run(`INSERT INTO ${table} (${keys.join(',')} ) VALUES (${Array(keys.length).fill('?').join(',')} )`, params)
+  }
+
+  /**
+   *
    * @param manga {Object}
    * @returns {Promise<Object|false>}
    */
   async addManga (manga = {}) {
     const row = await this.getManga(manga)
     if (row) return row
-    const { keys, params } = this._buildMangaParams(manga)
-    await this._run('INSERT INTO manga (' + keys.join(',') + ') VALUES (' + Array(keys.length).fill('?').join(',') + ')', params)
+    const { keys, params } = this._buildInsertParams(manga, ['manga_site_id', 'title', 'site_id', 'url', 'save', 'json', 'last', 'last_en', 'last_ru', 'last_check'])
+    await this._runInsert('manga', keys, params)
     this._dumpStorage()
     return await this.getManga(manga)
+  }
+
+  /**
+   *
+   * @param chapter
+   * @return {Promise<Object|false>}
+   */
+  async addChapter (chapter = {}) {
+    const row = await this.getChapter(chapter)
+    if (row) return row
+    const { keys, params } = this._buildInsertParams(chapter, ['manga_id', 'manga_site_chapter_is', 'json'])
+    await this._runInsert('chapters', keys, params)
+    // this._dumpStorage()
+    return await this.getChapter(chapter)
   }
 
   /**
@@ -291,10 +363,23 @@ class Storage {
    */
   async updateManga (manga = {}) {
     if (!manga.id) return
-    const { keys, params } = this._buildMangaParams(manga)
+    const { keys, params } = this._buildInsertParams(manga, ['manga_site_id', 'title', 'site_id', 'url', 'save', 'json', 'last', 'last_en', 'last_ru', 'last_check'])
     params.push(manga.id)
     await this._run('UPDATE manga SET ' + keys.map((k) => `${k} = ?`).join(',') + ' WHERE id = ?', params)
-    return this.getManga({ id: manga.id })
+    return await this.getManga({ id: manga.id })
+  }
+
+  /**
+   *
+   * @param manga {Object}
+   * @returns {Promise<Object|false>}
+   */
+  async updateChapter (chapter = {}) {
+    if (!chapter.id) return
+    const { keys, params } = this._buildInsertParams(chapter, ['manga_id', 'manga_site_chapter_is', 'json'])
+    params.push(chapter.id)
+    await this._run('UPDATE chapters SET ' + keys.map((k) => `${k} = ?`).join(',') + ' WHERE id = ?', params)
+    return await this.getChapter({ id: chapter.id })
   }
 
   /**

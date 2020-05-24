@@ -23,8 +23,9 @@ class MangaDex extends MangaSite {
     }
 
     this.rawMangaJSONSha = {}
-    this.rawChaptersJSONs = {}
+    this.rawChaptersJSONSha = {}
     this.imagePaths = {}
+    this.imageCheckStore = []
   }
 
   isMangaURL (url = this._url) {
@@ -74,46 +75,75 @@ class MangaDex extends MangaSite {
    */
   parseResponse (response) {
     // console.log('response in ' + this.name, response.url)
+    if (this._storage === null) return
     if (response.responseHeaders) {
       if (response.responseHeaders['content-type'] === 'application/json') {
-        console.log('json', response.url)
+        let JSONData
+        try {
+          JSONData = JSON.parse(Buffer.from(response.result.body, 'base64').toString())
+          if (!JSONData.status || JSONData.status.toLowerCase() !== 'ok') return
+        } catch (e) {
+          console.error(e)
+          return
+        }
         if (this.regexps.URL.mangaJSON.test(response.url)) {
-          this.updateManga(response)
+          this.updateManga(response.url, JSONData)
         } else if (this.regexps.URL.chapterJSON.test(response.url)) {
-          console.log('chapter json', response.url)
+          this.updateChapter(JSONData)
         }
       }
     }
   }
 
-  async updateManga (response) {
-    if (this._storage === null) return
-    try {
-      const newJSONData = JSON.parse(Buffer.from(response.result.body, 'base64').toString())
-      if (!newJSONData.status || newJSONData.status.toLowerCase() !== 'ok') return
-
-      const mangaId = parseInt(this.regexps.URL.mangaJSON.exec(response.url)[1])
-      if (this.rawMangaJSONSha[mangaId] && getSHA(JSON.stringify(newJSONData)) === this.rawMangaJSONSha[mangaId]) {
-        return
-      }
-
-      const manga = await this._storage.getManga({
-        site_id: this.id,
-        manga_site_id: mangaId
-      })
-      if (manga) {
-        const oldRaw = JSON.stringify(manga.json.raw)
-        const newRaw = JSON.stringify(newJSONData)
-
-        if (oldRaw !== newRaw) {
-          this.rawMangaJSONSha[mangaId] = newJSONData
-          manga.json.raw = newJSONData
-          await this._storage.updateManga(manga)
-        }
-      }
-    } catch (e) {
-      console.error(e)
+  async updateManga (url = '', mangaJSON = {}) {
+    const mangaId = parseInt(this.regexps.URL.mangaJSON.exec(url)[1])
+    if (this.rawMangaJSONSha[mangaId] && getSHA(JSON.stringify(mangaJSON)) === this.rawMangaJSONSha[mangaId]) {
+      return
     }
+
+    const manga = await this._storage.getManga({
+      site_id: this.id,
+      manga_site_id: mangaId
+    })
+    if (manga) {
+      const oldRaw = JSON.stringify(manga.json.raw)
+      const newRaw = JSON.stringify(mangaJSON)
+
+      if (oldRaw !== newRaw) {
+        this.rawMangaJSONSha[mangaId] = JSON.stringify(mangaJSON)
+        manga.json.raw = mangaJSON
+        await this._storage.updateManga(manga)
+      }
+    }
+  }
+
+  async updateChapter (chapterJSON = {}) {
+    if (this.saveMangaSiteIds.indexOf(chapterJSON.manga_id) === -1) return
+    if (this.rawChaptersJSONSha[chapterJSON.id] && getSHA(JSON.stringify(chapterJSON)) === this.rawChaptersJSONSha[chapterJSON.id]) return
+    this.rawChaptersJSONSha[chapterJSON.id] = getSHA(JSON.stringify(chapterJSON))
+
+    let chapter = this._storage.getChapter({
+      manga_id: chapterJSON.manga_id,
+      manga_site_chapter_id: chapterJSON.id
+    })
+
+    if (!chapter) {
+      chapter = await this._storage.addChapter({
+        manga_id: chapterJSON.manga_id,
+        manga_site_chapter_id: chapterJSON.id,
+        json: chapterJSON
+      })
+    } else {
+      chapter.json = chapterJSON
+      await this._storage.updateChapter(chapter)
+    }
+    chapterJSON.page_array.map((pageFileName, pageNum) => {
+      const fullPath = chapterJSON.server + chapterJSON.hash + '/' + pageFileName
+      if (typeof this.imagePaths[fullPath] !== 'undefined') return
+      this.imagePaths[fullPath] = `${chapter.manga_id}/${chapter.id}/${chapterJSON.hash.slice(0, 4)}_${pageNum}_${pageFileName}}`
+      this.imageCheckStore.push(fullPath)
+    })
+    console.log(this.imageCheckStore)
   }
 }
 
