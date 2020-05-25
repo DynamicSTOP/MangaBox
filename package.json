@@ -6,8 +6,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "node .builders/dev.js",
-    "build": "node .builders/build.js && electron-builder",
-    "rebuild": "electron-rebuild -f -w sqlite3"
+    "build": "node .builders/build.js && electron-builder"
   },
   "dependencies": {
     "sqlite3": "^4.2.0",
