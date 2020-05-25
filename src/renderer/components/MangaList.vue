@@ -7,7 +7,7 @@ export default {
   computed: {
     ...mapState(['allManga']),
     sortedManga () {
-      const s = this.allManga.slice(0).sort((a, b) => {
+      return this.allManga.slice(0).sort((a, b) => {
         const aNew = a.json.newChapters.indexOf('en') !== -1
         const bNew = b.json.newChapters.indexOf('en') !== -1
         if (aNew && !bNew) {
@@ -25,13 +25,6 @@ export default {
         }
         return a.id - b.id
       })
-      console.log(s.map(m => {
-        return {
-          id: m.id,
-          nc: JSON.stringify(m.json.newChapters)
-        }
-      }))
-      return s
     }
   }
 }
