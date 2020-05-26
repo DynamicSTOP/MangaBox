@@ -18,8 +18,8 @@ if (notProd) {
   applicationPaths.preloadAbs = path.resolve(applicationPaths.basePath, 'src', 'preload')
   applicationPaths.imagesAbs = path.resolve(applicationPaths.basePath, 'src', 'images')
 } else {
-  applicationPaths.preloadAbs = path.resolve(applicationPaths.basePath, 'preload')
-  applicationPaths.imagesAbs = path.resolve(applicationPaths.basePath, 'images')
+  applicationPaths.preloadAbs = path.resolve(__dirname, 'preload')
+  applicationPaths.imagesAbs = path.resolve(__dirname, 'images')
 }
 
 if (fs.existsSync(path.resolve(applicationPaths.basePath, 'config.json'))) {

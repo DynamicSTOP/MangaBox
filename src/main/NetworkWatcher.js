@@ -5,6 +5,8 @@ import fs from 'fs'
 import https from 'https'
 import { inflateSync, gunzipSync, brotliDecompressSync } from 'zlib'
 
+// TODO include https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Vary
+
 const checkRule = (rulesGroup, asRegexp = false, toLower) => {
   if (typeof rulesGroup === 'undefined') return false
   if (rulesGroup instanceof Array) {

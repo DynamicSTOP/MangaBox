@@ -323,6 +323,9 @@ class App {
   }
 
   openSiteView () {
+    if (this._tray) {
+      this._tray.setImage(path.resolve(this._pathsConfig.imagesAbs, 'ext_icon_inactive.png'))
+    }
     if (this._siteView === null) {
       this.createSiteView()
     }
