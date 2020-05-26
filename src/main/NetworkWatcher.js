@@ -241,7 +241,7 @@ export class NetworkWatcher extends EventEmitter {
             }
             const expireDate = this.getExpiredFromHeaders(info.responseHeaders)
             const cacheControl = this.getCacheControlFromHeaders(info.responseHeaders)
-            const cacheControlInfo = this.getCacheControlInfo(cacheControl, expireDate)
+            const cacheControlInfo = this.getCacheInfoPart(cacheControl, expireDate)
             Object.assign(info, cacheControlInfo)
             info.date = new Date().getTime()
             info.responseHeaders = validation.responseHeaders.filter(h => ['set-cookie', 'authorization', 'age'].indexOf(h.name) === -1)
@@ -308,7 +308,7 @@ export class NetworkWatcher extends EventEmitter {
     return false
   }
 
-  getCacheControlInfo (cacheControl = '', expireDate) {
+  getCacheInfoPart (cacheControl = '', expireDate) {
     const info = {}
 
     let validUntil = false
@@ -345,6 +345,9 @@ export class NetworkWatcher extends EventEmitter {
 
     if (validUntil !== false) {
       info.validUntil = validUntil
+    } else {
+      // if no date is set
+      info.revalidate = true
     }
     return info
   }
@@ -363,7 +366,7 @@ export class NetworkWatcher extends EventEmitter {
 
       info.date = new Date().getTime()
       const expireDate = this.getExpiredFromHeaders(responseHeaders)
-      const cacheControlInfo = this.getCacheControlInfo(cacheControl, expireDate)
+      const cacheControlInfo = this.getCacheInfoPart(cacheControl, expireDate)
       Object.assign(info, cacheControlInfo)
 
       if (method === 'POST') {
