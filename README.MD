@@ -8,7 +8,7 @@ using bigger cache.
 Images usually end up as big files. If we take 1 chapter of 25 pages and say each page is 200Kb total then total size 
 can go up to 5 Mb. Now most modern browsers are chromium based. Chromium has hardcoded cache limit of 2Gb and it will be
 shared across everything that is downloaded according to cache rules including css, js, images, audio, video, etc.
-Also it uses less RAM.
+Also Chrome uses way more RAM then it should.
 
 ## Implemented solution
 
