@@ -8,21 +8,32 @@ export default {
     ...mapState(['allManga']),
     sortedManga () {
       return this.allManga.slice(0).sort((a, b) => {
+        const newCA = typeof a.json.newChapters !== 'undefined'
+        const newCB = typeof b.json.newChapters !== 'undefined'
+        if (newCA && !newCB) {
+          return -1
+        } else if (!newCA && newCB) {
+          return 1
+        } else if (!newCA && newCB) {
+          return 0
+        }
+
         const aNew = a.json.newChapters.indexOf('en') !== -1
         const bNew = b.json.newChapters.indexOf('en') !== -1
         if (aNew && !bNew) {
           return -1
         } else if (!aNew && bNew) {
           return 1
-        } else {
-          const al = a.json.newChapters.length > 0
-          const bl = b.json.newChapters.length > 0
-          if (al && !bl) {
-            return -1
-          } else if (!al && bl) {
-            return 1
-          }
         }
+
+        const al = a.json.newChapters.length > 0
+        const bl = b.json.newChapters.length > 0
+        if (al && !bl) {
+          return -1
+        } else if (!al && bl) {
+          return 1
+        }
+
         return a.id - b.id
       })
     }
