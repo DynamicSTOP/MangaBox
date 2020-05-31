@@ -1,4 +1,4 @@
-const path = require('path');
+const path = require('path')
 
 const { VueLoaderPlugin } = require('vue-loader')
 const MiniCssExtractPlugin = require('mini-css-extract-plugin')
@@ -17,7 +17,7 @@ const config = {
     __dirname: process.env.NODE_ENV !== 'production',
     __filename: process.env.NODE_ENV !== 'production'
   },
-  module:{
+  module: {
     rules: [
       {
         test: /\.(js|vue)$/,
@@ -104,20 +104,22 @@ const config = {
   optimization: {
     noEmitOnErrors: true
   },
-  externals: { 'sqlite3':'commonjs sqlite3', },
+  externals: { 'sqlite3': 'commonjs sqlite3', },
   plugins: []
-};
+}
 
 if (process.env.NODE_ENV === 'production') {
-  config.plugins.push(new CopyPlugin([
-    {
-      from: path.resolve(__dirname, '..', 'src', 'preload'),
-      to: 'preload'
-    },
-    {
-      from: path.resolve(__dirname, '..', 'src', 'images'),
-      to: 'images'
-    }]
+  config.plugins.push(new CopyPlugin({
+      patterns: [
+        {
+          from: path.resolve(__dirname, '..', 'src', 'preload'),
+          to: 'preload'
+        },
+        {
+          from: path.resolve(__dirname, '..', 'src', 'images'),
+          to: 'images'
+        }]
+    }
   ))
 }
 

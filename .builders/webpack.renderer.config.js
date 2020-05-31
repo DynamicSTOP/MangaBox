@@ -136,11 +136,13 @@ const config = {
 }
 
 if (process.env.NODE_ENV === 'production') {
-  config.plugins.push(new CopyPlugin([
-    {
-      from: path.resolve(__dirname, '..', 'src', 'scripts'),
-      to: 'scripts'
-    }]
+  config.plugins.push(new CopyPlugin({
+      patterns: [
+        {
+          from: path.resolve(__dirname, '..', 'src', 'scripts'),
+          to: 'scripts'
+        }]
+    }
   ))
 }
 module.exports = config
