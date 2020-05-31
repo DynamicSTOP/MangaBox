@@ -43,6 +43,12 @@ class App {
     this._tray = null
     this.sites = []
 
+    /**
+     * for tray icon
+     * @type {boolean}
+     */
+    this.hasNewChapters = false
+
     this.mainNetworkWatcher.on('loadedFromCache', this.updateSavedSize.bind(this))
     this.addSites()
   }
@@ -108,6 +114,10 @@ class App {
   }
 
   show () {
+    if (this._tray) {
+      this._tray.setImage(path.resolve(this._pathsConfig.imagesAbs, 'ext_icon_inactive.png'))
+      this.hasNewChapters = false
+    }
     if (this._window !== null) {
       this._window.focus()
       return
@@ -323,9 +333,6 @@ class App {
   }
 
   openSiteView () {
-    if (this._tray) {
-      this._tray.setImage(path.resolve(this._pathsConfig.imagesAbs, 'ext_icon_inactive.png'))
-    }
     if (this._siteView === null) {
       this.createSiteView()
     }
@@ -470,7 +477,7 @@ class App {
       tempWatcher.setStorage(this._storage)
       tempWatcher.attach(hiddenWindow.webContents)
     }
-
+    this._tray.setImage(path.resolve(this._pathsConfig.imagesAbs, 'ext_icon_processing.png'))
     for (let i = 0; i < allManga.length; i++) {
       const manga = allManga[i]
       this._tray.setToolTip(`MangaBox\nChecking ${i + 1}/${allManga.length}\n${manga.title}`)
@@ -505,8 +512,8 @@ class App {
       }
       newChapters = newChapters.concat(alertChapters)
       if (alertChapters.length) {
+        this.hasNewChapters = true
         if (Notification.isSupported()) {
-          this._tray.setImage(path.resolve(this._pathsConfig.imagesAbs, 'ext_icon_inactive_2.png'))
           const notification = new Notification({
             title: `New Chapters ${newChapters.join(' ')}!`,
             body: `${info.title} has new chapter${newChapters.length > 1 ? 's' : ''}!`,
@@ -531,6 +538,12 @@ class App {
       this.sendToRenderer('MANGA_UPDATED', manga)
       await (new Promise((resolve) => setTimeout(resolve, timeout)))
     }
+    if (this.hasNewChapters) {
+      this._tray.setImage(path.resolve(this._pathsConfig.imagesAbs, 'ext_icon_inactive_2.png'))
+    } else {
+      this._tray.setImage(path.resolve(this._pathsConfig.imagesAbs, 'ext_icon_inactive.png'))
+    }
+
     this._checkingChapters = false
     return true
   }
