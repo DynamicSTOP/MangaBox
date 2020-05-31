@@ -7,11 +7,16 @@ import {
   session,
   Tray,
   Menu,
+  MenuItem,
+  dialog,
   Notification,
+  shell,
+  clipboard,
   app
 } from 'electron'
 import path from 'path'
-import { NetworkWatcher } from './NetworkWatcher'
+import fs from 'fs'
+import { getFileExtensionFromHeaders, NetworkWatcher } from './NetworkWatcher'
 import Google from './MangaSites/Google'
 import MangaDex from './MangaSites/MangaDex'
 import storage from './Storage'
@@ -58,7 +63,10 @@ class App {
     const contextMenu = Menu.buildFromTemplate([
       {
         id: 2,
-        label: 'Force check'
+        label: 'Force check',
+        click: () => {
+          this.checkNewChapters(true)
+        }
       },
       { type: 'separator' },
       {
@@ -276,40 +284,92 @@ class App {
       contextMenu = Menu.buildFromTemplate([
         {
           id: 2,
-          label: 'Copy link'
+          label: 'Copy link',
+          click: () => {
+            clipboard.writeText(data.href)
+          }
         },
         {
           id: 3,
-          label: 'Open in browser'
+          label: 'Open in browser',
+          click: () => {
+            shell.openExternal(data.href)
+          }
         }
       ])
     } else if (data.tag === 'img') {
       contextMenu = Menu.buildFromTemplate([
         {
           id: 2,
-          label: 'Copy image into buffer'
+          label: 'Copy image into buffer',
+          click: async () => {
+            const row = await this._storage.getFromPathsByUrl(data.src)
+            if (!row) return
+            let from
+            if (row.stored) {
+              from = path.resolve(this._pathsConfig.mangaDirAbs, row.path)
+            } else {
+              from = path.resolve(this._pathsConfig.cacheDirAbs, row.path)
+            }
+            clipboard.writeImage(from)
+          }
         },
         {
           id: 3,
-          label: 'Save image'
+          label: 'Save image',
+          click: async () => {
+            let name = data.src.split('/').filter(p => p.length !== 0).pop().replace(/\?.*$/g, '')
+            if (name === '') {
+              name = new Date().getTime().toString()
+            }
+            const row = await this._storage.getFromPathsByUrl(data.src)
+            if (!row) return
+            const ext = getFileExtensionFromHeaders(row.info.responseHeaders)
+            if (!name.match(new RegExp(`${ext}$`, 'g'))) {
+              name += ext
+            }
+            let from
+            if (row.stored) {
+              from = path.resolve(this._pathsConfig.mangaDirAbs, row.path)
+            } else {
+              from = path.resolve(this._pathsConfig.cacheDirAbs, row.path)
+            }
+            const to = dialog.showSaveDialogSync(this._window, { defaultPath: name })
+            if (to) {
+              fs.copyFileSync(from, to)
+            }
+          }
         },
         {
           id: 4,
-          label: 'Open in browser'
+          label: 'Open in browser',
+          click: () => {
+            shell.openExternal(data.src)
+          }
         }
       ])
     } else {
       contextMenu = Menu.buildFromTemplate([
         {
           id: 2,
-          label: 'Copy current url'
-        },
-        {
-          id: 3,
-          label: 'Inspect'
+          label: 'Copy current url',
+          click: () => {
+            clipboard.writeText(data.url)
+          }
         }
       ])
     }
+    contextMenu.append(new MenuItem({
+      id: 98,
+      type: 'separator'
+    }))
+    contextMenu.append(new MenuItem({
+      id: 99,
+      label: 'Inspect',
+      click: () => {
+        this._siteView.webContents.inspectElement(data.x, data.y)
+      }
+    }))
     contextMenu.popup()
   }
 
