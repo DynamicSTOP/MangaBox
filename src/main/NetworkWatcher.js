@@ -481,7 +481,6 @@ export class NetworkWatcher extends EventEmitter {
         result.on('data', (chunk) => {
           body = Buffer.concat([body, chunk])
         })
-
         result.on('end', async () => {
           body = await this._decodeRevalidateBody(result, body)
           resolve({
@@ -541,27 +540,14 @@ export class NetworkWatcher extends EventEmitter {
 
 export const getFileExtensionFromHeaders = (responseHeaders) => {
   const contentType = responseHeaders.find(h => h.name === 'content-type')
-  if (contentType) {
-    switch (contentType.value) {
-      case 'image/jpeg':
-        return '.jpg'
-      case 'image/png':
-        return '.png'
-      case 'image/gif':
-        return '.gif'
-      case 'image/webp':
-        return '.webp'
-      case 'image/apng':
-        return '.apng'
-      case 'image/bmp':
-        return '.bmp'
-      case 'image/x-icon':
-        return '.x-icon'
-      case 'image/svg+xml':
-        return '.svg'
-      case 'image/tiff':
-        return '.tiff'
-    }
-  }
+  if (contentType.indexOf('image/jpeg') !== -1) return '.jpg'
+  if (contentType.indexOf('image/png') !== -1) return '.png'
+  if (contentType.indexOf('image/gif') !== -1) return '.gif'
+  if (contentType.indexOf('image/webp') !== -1) return '.webp'
+  if (contentType.indexOf('image/apng') !== -1) return '.apng'
+  if (contentType.indexOf('image/bmp') !== -1) return '.bmp'
+  if (contentType.indexOf('image/x-icon') !== -1) return '.x-icon'
+  if (contentType.indexOf('image/svg+xml') !== -1) return '.svg'
+  if (contentType.indexOf('image/tiff') !== -1) return '.tiff'
   return ''
 }
