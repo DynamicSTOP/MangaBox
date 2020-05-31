@@ -181,6 +181,16 @@ class App {
         console.error(e)
       }
     })
+
+    ipcMain.on('async-site-message', async (event, message) => {
+      try {
+        const json = JSON.parse(message)
+        const { data, type } = json
+        await this.parseMessageFromSite(type, data)
+      } catch (e) {
+        console.error(e)
+      }
+    })
   }
 
   /**
@@ -241,6 +251,66 @@ class App {
         })
         break
     }
+  }
+
+  async parseMessageFromSite (type = '', data) {
+    switch (type) {
+      case 'CONTEXT_MENU':
+        this.showContextMenu(data)
+        break
+      default:
+        if (this._debug) {
+          console.log('message from site', type, data)
+        }
+        this.sendToRenderer('unhandled', {
+          data,
+          type
+        })
+        break
+    }
+  }
+
+  showContextMenu (data) {
+    let contextMenu
+    if (data.tag === 'a') {
+      contextMenu = Menu.buildFromTemplate([
+        {
+          id: 2,
+          label: 'Copy link'
+        },
+        {
+          id: 3,
+          label: 'Open in browser'
+        }
+      ])
+    } else if (data.tag === 'img') {
+      contextMenu = Menu.buildFromTemplate([
+        {
+          id: 2,
+          label: 'Copy image into buffer'
+        },
+        {
+          id: 3,
+          label: 'Save image'
+        },
+        {
+          id: 4,
+          label: 'Open in browser'
+        }
+      ])
+    } else {
+      contextMenu = Menu.buildFromTemplate([
+        {
+          id: 2,
+          label: 'Copy current url'
+        },
+        {
+          id: 3,
+          label: 'Inspect'
+        }
+      ])
+    }
+    contextMenu.popup()
   }
 
   async getLocalImagePath (url = '') {
@@ -361,6 +431,7 @@ class App {
 
     this._siteView = new BrowserView({
       webPreferences: {
+        preload: path.resolve(this._pathsConfig.preloadAbs, 'preload_site.js'),
         nodeIntegration: false,
         nodeIntegrationInWorker: false,
         contextIsolation: true,
