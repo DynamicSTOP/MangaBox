@@ -221,8 +221,8 @@ export class NetworkWatcher extends EventEmitter {
         await this._storage.deleteFromPathsByUrl(url)
         return false
       }
-      let validation = false
       try {
+        let validation = false
         let { info } = row
         const { stored } = row
 
@@ -235,23 +235,36 @@ export class NetworkWatcher extends EventEmitter {
             if (validation.statusCode !== 200 && validation.statusCode !== 304) {
               return false
             }
-            info = {
+            const newInfo = {
               url,
               headers,
-              responseHeaders: validation.responseHeaders.filter(h => ['set-cookie', 'authorization', 'age'].indexOf(h.name) === -1),
-              base64Encoded: true
+              base64Encoded: true,
+              date: new Date().getTime()
             }
-            const expireDate = this.getExpiredFromHeaders(info.responseHeaders)
-            const cacheControl = this.getCacheControlFromHeaders(info.responseHeaders)
-            const cacheControlInfo = this.getCacheInfoPart(cacheControl, expireDate)
-            Object.assign(info, cacheControlInfo)
-            info.date = new Date().getTime()
-            info.responseHeaders = validation.responseHeaders.filter(h => ['set-cookie', 'authorization', 'age'].indexOf(h.name) === -1)
-            await this._storage.addToPaths(url, row.path, info, stored)
             if (validation.statusCode === 200) {
+              newInfo.responseHeaders = validation.responseHeaders.filter(h => ['set-cookie', 'authorization', 'age'].indexOf(h.name) === -1)
+              const expireDate = this.getExpiredFromHeaders(newInfo.responseHeaders)
+              const cacheControl = this.getCacheControlFromHeaders(newInfo.responseHeaders)
+              const cacheControlInfo = this.getCacheInfoPart(cacheControl, expireDate)
+              Object.assign(newInfo, cacheControlInfo)
               fs.writeFileSync(cachedPath, validation.body, 'base64')
               body = validation.body
+            } else if (validation.statusCode === 304) {
+              newInfo.responseHeaders = info.responseHeaders.filter(h => h.name.toLowerCase() !== 'date')
+              newInfo.responseVHeaders = validation.responseHeaders.filter(h => ['set-cookie', 'authorization', 'age'].indexOf(h.name) === -1)
+              let dateHeader = newInfo.responseVHeaders.filter(h => h.name === 'date')
+              if (dateHeader.length > 0) {
+                dateHeader = dateHeader[0]
+              } else {
+                dateHeader = {
+                  name: 'date',
+                  value: new Date().toUTCString()
+                }
+              }
+              newInfo.responseHeaders.push(dateHeader)
             }
+            await this._storage.addToPaths(url, row.path, newInfo, stored)
+            info = newInfo
           }
         }
 
@@ -363,10 +376,9 @@ export class NetworkWatcher extends EventEmitter {
       const info = {
         url,
         headers,
-        responseHeaders: responseHeaders.filter(h => ['cookie', 'authorization', 'age'].indexOf(h.name) === -1)
+        responseHeaders: responseHeaders.filter(h => ['cookie', 'authorization', 'age'].indexOf(h.name) === -1),
+        date: new Date().getTime()
       }
-
-      info.date = new Date().getTime()
       const expireDate = this.getExpiredFromHeaders(responseHeaders)
       const cacheControlInfo = this.getCacheInfoPart(cacheControl, expireDate)
       Object.assign(info, cacheControlInfo)
@@ -476,24 +488,29 @@ export class NetworkWatcher extends EventEmitter {
       }
       options.headers['accept-encoding'] = 'gzip, deflate, br'
 
-      let body = Buffer.from('')
+      let bodyBuffer = Buffer.from('')
       const req = https.request(info.url, options, (result) => {
         result.on('data', (chunk) => {
-          body = Buffer.concat([body, chunk])
+          bodyBuffer = Buffer.concat([bodyBuffer, chunk])
         })
         result.on('end', async () => {
-          body = await this._decodeRevalidateBody(result, body)
+          const { decoded, body } = await this._decodeRevalidateBody(result, bodyBuffer)
+
+          let responseHeaders = Object.keys(result.headers)
+            .map(k => {
+              return {
+                name: k.toLowerCase(),
+                value: result.headers[k]
+              }
+            })
+          if (decoded) {
+            responseHeaders = responseHeaders.filter(h => h.name !== 'content-encoding')
+          }
+
           resolve({
             result: true,
             statusCode: result.statusCode,
-            responseHeaders: Object.keys(result.headers)
-              .filter(k => k.toLowerCase() !== 'accept-encoding')
-              .map(k => {
-                return {
-                  name: k.toLowerCase(),
-                  value: result.headers[k]
-                }
-              }),
+            responseHeaders,
             body: body.toString('base64')
           })
         })
@@ -511,29 +528,35 @@ export class NetworkWatcher extends EventEmitter {
    *
    * @param result {Object}
    * @param body {ArrayBuffer}
-   * @return {Promise<ArrayBuffer>}
+   * @return {Promise<Object>}
+   * @private
    */
   _decodeRevalidateBody (result, body) {
-    return new Promise((resolve, reject) => {
-      const encoding = Object.keys(result.headers).find((k) => k.toLowerCase() === 'content-encoding')
-      if (encoding) {
-        switch (result.headers[encoding].toLowerCase()) {
-          case 'gzip':
-            resolve(gunzipSync(body))
-            break
-          case 'deflate':
-            resolve(inflateSync(body))
-            break
-          case 'br':
-            resolve(brotliDecompressSync(body))
-            break
-          default:
-            console.error('unknown encoding on revalidate', result.headers[encoding])
-            return reject(Error(`bad encoding "${result.headers[encoding]}"`))
+    return new Promise((resolve) => {
+      const encodingName = Object.keys(result.headers).find((k) => k.toLowerCase() === 'content-encoding')
+      if (encodingName) {
+        const encoding = result.headers[encodingName].toLowerCase()
+        if (encoding.indexOf('gzip') !== -1) {
+          return resolve({
+            decoded: true,
+            body: gunzipSync(body)
+          })
+        } else if (encoding.indexOf('deflate') !== -1) {
+          return resolve({
+            decoded: true,
+            body: inflateSync(body)
+          })
+        } else if (encoding.indexOf('br') !== -1) {
+          return resolve({
+            decoded: true,
+            body: brotliDecompressSync(body)
+          })
         }
-      } else {
-        resolve(body)
       }
+      resolve({
+        decoded: false,
+        body
+      })
     })
   }
 }
