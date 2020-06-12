@@ -563,14 +563,18 @@ export class NetworkWatcher extends EventEmitter {
 
 export const getFileExtensionFromHeaders = (responseHeaders) => {
   const contentType = responseHeaders.find(h => h.name === 'content-type')
-  if (contentType.indexOf('image/jpeg') !== -1) return '.jpg'
-  if (contentType.indexOf('image/png') !== -1) return '.png'
-  if (contentType.indexOf('image/gif') !== -1) return '.gif'
-  if (contentType.indexOf('image/webp') !== -1) return '.webp'
-  if (contentType.indexOf('image/apng') !== -1) return '.apng'
-  if (contentType.indexOf('image/bmp') !== -1) return '.bmp'
-  if (contentType.indexOf('image/x-icon') !== -1) return '.x-icon'
-  if (contentType.indexOf('image/svg+xml') !== -1) return '.svg'
-  if (contentType.indexOf('image/tiff') !== -1) return '.tiff'
+  if (typeof contentType === 'undefined') {
+    console.error('missing content-type header', JSON.stringify(responseHeaders))
+    return ''
+  }
+  if (contentType.value.indexOf('image/jpeg') !== -1) return '.jpg'
+  if (contentType.value.indexOf('image/png') !== -1) return '.png'
+  if (contentType.value.indexOf('image/gif') !== -1) return '.gif'
+  if (contentType.value.indexOf('image/webp') !== -1) return '.webp'
+  if (contentType.value.indexOf('image/apng') !== -1) return '.apng'
+  if (contentType.value.indexOf('image/bmp') !== -1) return '.bmp'
+  if (contentType.value.indexOf('image/x-icon') !== -1) return '.x-icon'
+  if (contentType.value.indexOf('image/svg+xml') !== -1) return '.svg'
+  if (contentType.value.indexOf('image/tiff') !== -1) return '.tiff'
   return ''
 }
