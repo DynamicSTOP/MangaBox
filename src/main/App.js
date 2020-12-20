@@ -68,14 +68,19 @@ class App {
           this.checkNewChapters(true)
         }
       },
+      {
+        id: 3,
+        label: 'Drop jsons',
+        click: () => this._storage.invalidateJsons()
+      },
       { type: 'separator' },
       {
-        id: 4,
+        id: 5,
         label: 'Open app',
         click: () => this.show()
       },
       {
-        id: 5,
+        id: 6,
         label: 'Exit',
         click: () => this.exit()
       }

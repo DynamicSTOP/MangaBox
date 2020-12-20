@@ -490,6 +490,28 @@ class Storage {
     })
   }
 
+  async invalidateJsons () {
+    return new Promise((resolve, reject) => {
+      this.db.all('SELECT * from paths where info like \'%application/json%\'', (error, rows) => {
+        if (error) {
+          return reject(error)
+        }
+        rows.map(async r => {
+          r.info = JSON.parse(r.info)
+          if (typeof r.info.revalidate === 'undefined') {
+            r.info.validUntil = null
+            r.info.revalidate = true
+            await this._run('UPDATE paths SET info = ? WHERE url = ?', [JSON.stringify(r.info), r.url])
+            console.log(r.id)
+          }
+          return r
+        })
+
+        resolve()
+      })
+    })
+  }
+
   async getFromVault (name = '') {
     const row = await this._get('SELECT name, value FROM vault WHERE name=?', name)
     if (row) {
